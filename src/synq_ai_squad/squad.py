@@ -16,7 +16,6 @@ Ideas from Step 3 (still here): conditional edge (the loop), structured output, 
 """
 
 import operator
-import re
 import sys
 from typing import Annotated, TypedDict
 
@@ -27,6 +26,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 from pydantic import BaseModel, Field
 
+from synq_ai_squad.checks import BANNED_WORDS, BOOKING_URL, rule_problems
 from synq_ai_squad.rag import get_vectorstore
 
 load_dotenv()
@@ -34,9 +34,6 @@ load_dotenv()
 MAX_ROUNDS = 3     # the Writer gets at most 3 attempts
 PASS_SCORE = 8     # the Critic must give at least 8/10 to approve
 RESULTS_PER_SEARCH = 3
-
-# Words our clients' readers shouldn't see. Checked by plain code, not by the AI.
-BANNED_WORDS = ["n8n", "API", "webhook", "workflow", "LLM", "audit"]
 
 MODEL = "gemini-3.1-flash-lite"
 manager_llm = ChatGoogleGenerativeAI(model=MODEL, temperature=0)
@@ -154,8 +151,8 @@ RULES:
   and don't promise what the text can't deliver.
 - Plain English for busy business owners. Focus on benefits, not technology.
 - Never use these words: {", ".join(BANNED_WORDS)}.
-- End with one clear call to action (for example, booking a free strategy call).
-- Output only the finished text, with no source numbers like [1] and no commentary.
+- End with one clear call to action: book a free strategy call at {BOOKING_URL} (write the link out in full).
+- Output only the finished text: no source numbers like [1], no placeholders like [Link], no commentary.
 
 RESEARCH NOTES:
 {state['research']}
@@ -189,9 +186,8 @@ DRAFT:
     review: Review = critic_llm.with_structured_output(Review).invoke(prompt)
 
     # Code checks what code can check reliably; the AI checks the rest.
-    found = [w for w in BANNED_WORDS if re.search(rf"\b{re.escape(w)}\b", state["draft"], re.IGNORECASE)]
-    if found:
-        review.issues.append(f"Remove these banned words: {found}")
+    if problems := rule_problems(state["draft"]):
+        review.issues.extend(problems)
         review.score = min(review.score, PASS_SCORE - 1)
     if review.unsupported_claims:
         review.score = min(review.score, PASS_SCORE - 1)  # made-up facts can never pass
@@ -227,6 +223,7 @@ graph = builder.compile()
 
 
 if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8")  # Windows terminals can't print some AI characters otherwise
     request = " ".join(sys.argv[1:]) or "A LinkedIn post about why answering leads after hours wins more customers"
     print(f"Request: {request}\n")
 

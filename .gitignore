@@ -16,3 +16,6 @@ wheels/
 
 # Local vector database (rebuilt by ingest)
 chroma_db/
+
+# Evaluation run outputs
+evals/results/
