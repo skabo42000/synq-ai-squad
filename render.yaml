@@ -10,8 +10,6 @@ services:
     startCommand: uvicorn synq_ai_squad.api:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
-      - key: PYTHON_VERSION
-        value: "3.12.14"
       - key: PYTHONIOENCODING
         value: utf-8
       - key: GOOGLE_API_KEY
