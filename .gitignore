@@ -19,3 +19,6 @@ chroma_db/
 
 # Evaluation run outputs
 evals/results/
+
+# Search index (rebuilt by: uv run python -m synq_ai_squad.rag)
+vector_store.json

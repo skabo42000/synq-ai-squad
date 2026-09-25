@@ -7,16 +7,20 @@ What happens:
   1. LOAD   - read every .md file in docs/
   2. SPLIT  - cut each file into small chunks (one per "## heading" section)
   3. EMBED  - turn each chunk into a list of numbers that captures its meaning
-  4. STORE  - save chunks + numbers in Chroma, a database on your own computer
-Later, a question gets turned into numbers too, and Chroma returns the chunks
+  4. STORE  - save chunks + numbers in a small file (vector_store.json)
+Later, a question gets turned into numbers too, and the store returns the chunks
 whose numbers are closest, i.e. the chunks with the most similar meaning.
+
+We use LangChain's simple in-memory store: for a few dozen chunks it is instant, and it's
+tiny to deploy. (A dedicated vector database like Chroma or pgvector pays off at thousands
+of chunks; we used Chroma at first, but it made the Render build too big for the free plan.)
 """
 
 from pathlib import Path
 
 from dotenv import load_dotenv
-from langchain_chroma import Chroma
 from langchain_core.documents import Document
+from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 
@@ -24,16 +28,18 @@ load_dotenv()
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DOCS_DIR = PROJECT_ROOT / "docs"
-DB_DIR = PROJECT_ROOT / "chroma_db"
+STORE_FILE = PROJECT_ROOT / "vector_store.json"
 
 
-def get_vectorstore() -> Chroma:
-    """Open the Chroma database (creates an empty one if it doesn't exist yet)."""
-    return Chroma(
-        collection_name="synq_docs",
-        embedding_function=GoogleGenerativeAIEmbeddings(model="gemini-embedding-001"),
-        persist_directory=str(DB_DIR),
-    )
+def embeddings() -> GoogleGenerativeAIEmbeddings:
+    return GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
+
+
+def get_vectorstore() -> InMemoryVectorStore:
+    """Load the saved store from vector_store.json (run this module first to create it)."""
+    if not STORE_FILE.exists():
+        raise FileNotFoundError("No vector_store.json yet. Run: uv run python -m synq_ai_squad.rag")
+    return InMemoryVectorStore.load(str(STORE_FILE), embeddings())
 
 
 def load_and_split() -> list[Document]:
@@ -59,10 +65,10 @@ def load_and_split() -> list[Document]:
 
 def ingest() -> None:
     chunks = load_and_split()
-    store = get_vectorstore()
-    store.reset_collection()  # start fresh so re-running never creates duplicates
+    store = InMemoryVectorStore(embeddings())  # a fresh store every time, so no duplicates
     store.add_documents(chunks)
-    print(f"Stored {len(chunks)} chunks from {len(list(DOCS_DIR.glob('*.md')))} files in {DB_DIR.name}/")
+    store.dump(str(STORE_FILE))
+    print(f"Stored {len(chunks)} chunks from {len(list(DOCS_DIR.glob('*.md')))} files in {STORE_FILE.name}")
     for c in chunks:
         print(f"   - {c.metadata['source']:22} | {c.metadata.get('section', c.metadata.get('title', ''))}")
 

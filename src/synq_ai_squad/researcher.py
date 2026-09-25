@@ -33,10 +33,10 @@ class State(TypedDict):
 
 
 def retrieve(state: State) -> dict:
-    results = store.similarity_search_with_relevance_scores(state["question"], k=TOP_K)
+    results = store.similarity_search_with_score(state["question"], k=TOP_K)
     sources = []
     for doc, score in results:
-        doc.metadata["score"] = round(score, 2)  # 1.0 = perfect match, lower = less related
+        doc.metadata["score"] = round(score, 2)  # similarity: 1.0 = perfect match, lower = less related
         sources.append(doc)
     return {"sources": sources}
 
