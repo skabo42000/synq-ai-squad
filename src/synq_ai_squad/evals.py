@@ -57,7 +57,9 @@ class Verdict(BaseModel):
     claims: list[Claim]
 
 
-judge = ChatGroq(model="openai/gpt-oss-120b", temperature=0).with_structured_output(Verdict, method="json_schema")
+judge = ChatGroq(model="openai/gpt-oss-120b", temperature=0).with_structured_output(Verdict, method="json_schema").with_retry(
+    stop_after_attempt=3  # Groq occasionally returns an empty answer; just try again
+)
 
 
 def judge_claims(draft: str) -> list[str]:
@@ -112,7 +114,7 @@ def main() -> None:
         print("  RESULT:", "PASS" if r["passed"] else "FAIL", *r["failures"], sep="\n    ")
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    out_file = RESULTS_DIR / f"{datetime.now():%Y-%m-%d_%H%M}.json"
+    out_file = RESULTS_DIR / f"{datetime.now():%Y-%m-%d_%H%M%S}.json"
     out_file.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
 
     passed = sum(r["passed"] for r in results)

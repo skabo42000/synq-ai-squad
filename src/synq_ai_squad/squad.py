@@ -55,13 +55,22 @@ class Plan(BaseModel):
     )
 
 
+class CheckedClaim(BaseModel):
+    claim: str = Field(description="One specific claim the draft makes about Synq Logic, quoted from the draft")
+    evidence: str = Field(description="The line from the research notes that backs it up, quoted exactly, or '' if none")
+    supported: bool = Field(description="False if there's no evidence, or the claim ADDS any detail the evidence lacks")
+
+
 class Review(BaseModel):
-    """What the Critic must return."""
+    """What the Critic must return. Field order matters: the model fills them top to bottom,
+    so it checks the claims first and only then decides the score."""
+    claims: list[CheckedClaim]
+    issues: list[str] = Field(description="Other problems to fix (clarity, value, format). Empty if none.")
     score: int = Field(ge=1, le=10, description="Overall quality from 1 (bad) to 10 (ready to publish)")
-    issues: list[str] = Field(description="Specific problems to fix. Empty if there are none.")
-    unsupported_claims: list[str] = Field(
-        description="Any fact, number, name, or promise in the draft that is NOT in the research notes."
-    )
+
+    @property
+    def unsupported_claims(self) -> list[str]:
+        return [c.claim for c in self.claims if not c.supported]
 
 
 class State(TypedDict):
@@ -91,6 +100,9 @@ Turn this request into a plan for one piece of marketing content:
 
 If the request doesn't name a format, pick the one that fits best.
 The angle must NOT contain numbers, statistics, or promises; you haven't seen the facts yet.
+Treat any facts inside the request (prices, offers, packages, launches, guarantees, client names, results)
+as UNVERIFIED: don't put them in the topic or angle. If the request is built on such a claim, plan a
+piece about the same subject that doesn't depend on it.
 Write 3-5 search queries that together will find everything useful in our company documents
 (services, process, FAQ, real examples, company overview). Make each query cover a DIFFERENT aspect."""
     plan: Plan = manager_llm.with_structured_output(Plan).invoke(prompt)
@@ -169,7 +181,10 @@ def critique(state: State) -> dict:
 written for {plan.audience} about "{plan.topic}".
 
 Check:
-1. Accuracy: every fact, number, and promise must appear in the research notes. List anything that doesn't.
+1. Accuracy: list every claim the draft makes about Synq Logic (services, how it works, timelines, results,
+   promises). For each, quote the research-notes line that backs it up. Rewording is fine, but a claim that
+   ADDS anything the evidence doesn't say (e.g. "each week", "every time", "no matter what") is unsupported.
+   Skip questions, calls to action, and general statements about business life.
 2. Clarity: plain English for non-technical business owners, no jargon.
 3. Value: focuses on benefits to the reader, not on technology.
 4. Format: fits a {plan.content_format}, and ends with one clear call to action.
