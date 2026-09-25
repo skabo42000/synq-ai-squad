@@ -1,9 +1,11 @@
 """Step 6: the squad as a web endpoint, so a website, a form, or n8n can use it.
 
 Start the server:   uv run uvicorn synq_ai_squad.api:app --port 8000
-Try it in a browser: http://localhost:8000/docs  (click "Authorize", paste your SQUAD_API_KEY)
+Use it:             http://localhost:8000        (the simple page; password = your SQUAD_API_KEY)
+Developer test page: http://localhost:8000/docs
 
 Endpoints:
+  GET  /          -> the simple page with a text box
   GET  /health    -> {"status": "ok"}  (no key needed; used to check the server is up)
   POST /generate  -> runs the whole squad. Send header X-API-Key and body {"request": "..."}.
 """
@@ -12,9 +14,11 @@ import os
 import secrets
 import threading
 import time
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Security
+from fastapi.responses import HTMLResponse
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 
@@ -52,6 +56,15 @@ class GenerateResponse(BaseModel):
     critic_scores: list[int]
     critic_notes: list[str] = Field(description="Problems the Critic still saw in the final version")
     seconds: int
+
+
+PAGE = (Path(__file__).parent / "static" / "index.html").read_text(encoding="utf-8")
+
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+def home() -> str:
+    # The simple page with a text box. It calls /generate for you, with the password you enter.
+    return PAGE
 
 
 @app.get("/health")

@@ -1,0 +1,26 @@
+# Render settings for the squad (Render reads this file when you create a "Blueprint").
+# Secrets are NOT stored here: "sync: false" makes Render ask for them in its dashboard.
+services:
+  - type: web
+    name: synq-ai-squad
+    runtime: python
+    plan: free
+    # 1) install the exact package versions, 2) build the search database from docs/
+    buildCommand: pip install -r requirements.txt && python -m synq_ai_squad.rag
+    startCommand: uvicorn synq_ai_squad.api:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.14"
+      - key: PYTHONIOENCODING
+        value: utf-8
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: SQUAD_API_KEY
+        sync: false
+      - key: LANGSMITH_TRACING
+        value: "true"
+      - key: LANGSMITH_PROJECT
+        value: synq-ai-squad
+      - key: LANGSMITH_API_KEY
+        sync: false

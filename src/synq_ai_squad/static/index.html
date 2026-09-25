@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Synq Content Squad</title>
+<style>
+  :root {
+    --bg: #0b1120; --panel: #111a2e; --border: #23304a; --text: #e2e8f0; --muted: #94a3b8;
+    --accent: #22d3ee; --accent-ink: #04212a; --ok: #34d399; --warn: #fbbf24; --err: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 28px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 20px; }
+  label { display: block; font-weight: 600; margin-bottom: 8px; }
+  textarea, input { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+                    border-radius: 10px; padding: 12px; font: inherit; }
+  textarea { min-height: 96px; resize: vertical; }
+  textarea:focus, input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 16px; }
+  .chip { background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 999px;
+          padding: 6px 12px; font-size: .85rem; cursor: pointer; }
+  .chip:hover { color: var(--text); border-color: var(--accent); }
+  .btn { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 10px; padding: 12px 22px;
+         font-weight: 700; font-size: 1rem; cursor: pointer; }
+  .btn:disabled { opacity: .5; cursor: wait; }
+  .btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); padding: 8px 14px; font-size: .9rem; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .link { background: none; border: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font-size: .85rem; padding: 0; }
+  .status { color: var(--muted); }
+  .status ol { margin: 8px 0 0; padding-left: 20px; }
+  .badge { display: inline-block; font-weight: 700; padding: 4px 10px; border-radius: 999px; font-size: .85rem; }
+  .badge.ok { background: rgba(52,211,153,.15); color: var(--ok); }
+  .badge.warn { background: rgba(251,191,36,.15); color: var(--warn); }
+  .meta { color: var(--muted); font-size: .9rem; margin: 12px 0; }
+  .meta b { color: var(--text); font-weight: 600; }
+  .content { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+             padding: 16px; margin: 0; font: inherit; }
+  .notes { color: var(--warn); font-size: .9rem; }
+  .error { color: var(--err); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Synq Content Squad</h1>
+  <p class="sub">Tell the team what to write. It only uses facts from Synq Logic's own documents.</p>
+
+  <!-- Step 1: password (asked once, remembered in this browser) -->
+  <section class="panel" id="login">
+    <label for="pw">Password</label>
+    <input id="pw" type="password" autocomplete="current-password" placeholder="Paste your squad password">
+    <p class="status" style="font-size:.85rem">It's the <code>SQUAD_API_KEY</code> value. This browser will remember it.</p>
+    <button class="btn" id="save-pw">Continue</button>
+  </section>
+
+  <!-- Step 2: the request -->
+  <section class="panel" id="ask" hidden>
+    <label for="req">What should we write?</label>
+    <textarea id="req" maxlength="500" placeholder="e.g. A LinkedIn post for dental clinics about missed calls"></textarea>
+    <div class="chips">
+      <button class="chip">A LinkedIn post for dental clinics about missed calls</button>
+      <button class="chip">An email to restaurant owners about no-show reminders</button>
+      <button class="chip">A short blog article for real estate agents about fast replies to leads</button>
+    </div>
+    <div class="row">
+      <button class="btn" id="go">Write it</button>
+      <button class="link" id="forget">Change password</button>
+    </div>
+  </section>
+
+  <!-- Step 3: waiting -->
+  <section class="panel status" id="wait" hidden>
+    <b>The team is working&hellip; <span id="timer">0</span>s</b> (usually 30&ndash;90 seconds)
+    <ol>
+      <li>Manager plans the piece and what to look up</li>
+      <li>Researcher searches Synq Logic's documents</li>
+      <li>Writer drafts it</li>
+      <li>Critic checks every claim, and sends it back if needed</li>
+    </ol>
+  </section>
+
+  <!-- Step 4: result or error -->
+  <section class="panel" id="result" hidden>
+    <div class="row">
+      <span class="badge" id="badge"></span>
+      <button class="btn ghost" id="copy">Copy text</button>
+    </div>
+    <p class="meta" id="meta"></p>
+    <pre class="content" id="content"></pre>
+    <div class="notes" id="notes"></div>
+  </section>
+  <section class="panel error" id="err" hidden></section>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const KEY_NAME = "squad-password";
+  const store = {  // browser storage can be blocked (e.g. private windows), so never let it crash the page
+    get() { try { return localStorage.getItem(KEY_NAME) || ""; } catch { return ""; } },
+    set(v) { try { v ? localStorage.setItem(KEY_NAME, v) : localStorage.removeItem(KEY_NAME); } catch {} },
+  };
+  let password = store.get();
+
+  function show(ids) {
+    for (const id of ["login", "ask", "wait", "result", "err"]) $(id).hidden = !ids.includes(id);
+  }
+  function showError(msg) {
+    $("err").textContent = msg;
+    show(["ask", "err"]);
+  }
+
+  $("save-pw").onclick = () => {
+    password = $("pw").value.trim();
+    if (!password) return;
+    store.set(password);
+    show(["ask"]);
+    $("req").focus();
+  };
+  $("pw").onkeydown = (e) => { if (e.key === "Enter") $("save-pw").click(); };
+  $("forget").onclick = () => { password = ""; store.set(""); $("pw").value = ""; show(["login"]); };
+  document.querySelectorAll(".chip").forEach((c) => (c.onclick = () => { $("req").value = c.textContent; $("req").focus(); }));
+
+  $("go").onclick = async () => {
+    const request = $("req").value.trim();
+    if (request.length < 5) return showError("Please describe what you want in a few more words.");
+
+    $("go").disabled = true;
+    show(["ask", "wait"]);
+    const started = Date.now();
+    const tick = setInterval(() => ($("timer").textContent = Math.round((Date.now() - started) / 1000)), 1000);
+
+    try {
+      const res = await fetch("/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-API-Key": password },
+        body: JSON.stringify({ request }),
+      });
+      if (res.status === 401) { store.set(""); password = ""; show(["login"]); $("pw").focus();
+                                return alert("That password didn't work. Please paste it again."); }
+      if (res.status === 429) return showError("The team is busy with another request. Try again in a minute.");
+      if (res.status === 422) return showError("Your request should be between 5 and 500 characters.");
+      if (!res.ok) return showError("Something went wrong while writing. Please try again.");
+
+      const d = await res.json();
+      $("badge").textContent = d.approved ? "Approved by the Critic" : "Not approved: read carefully before using";
+      $("badge").className = "badge " + (d.approved ? "ok" : "warn");
+      $("meta").innerHTML = "";
+      for (const [k, v] of [["Format", d.content_format], ["For", d.audience], ["Drafts", d.critic_scores.length], ["Time", d.seconds + "s"]]) {
+        const b = document.createElement("b"); b.textContent = k + ": ";
+        $("meta").append(b, v + "   ");
+      }
+      $("content").textContent = d.content;
+      $("notes").textContent = d.critic_notes.length ? "Critic's remaining notes: " + d.critic_notes.join(" | ") : "";
+      show(["ask", "result"]);
+    } catch {
+      showError("Couldn't reach the server. On the free plan it sleeps when unused; wait a minute and try again.");
+    } finally {
+      clearInterval(tick);
+      $("go").disabled = false;
+    }
+  };
+
+  $("copy").onclick = async () => {
+    try { await navigator.clipboard.writeText($("content").textContent); $("copy").textContent = "Copied!"; }
+    catch { $("copy").textContent = "Select the text and press Ctrl+C"; }
+    setTimeout(() => ($("copy").textContent = "Copy text"), 2000);
+  };
+
+  show([password ? "ask" : "login"]);
+</script>
+</body>
+</html>
