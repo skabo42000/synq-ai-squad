@@ -5,8 +5,10 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "langchain-chroma>=1.1.0",
     "langchain-google-genai>=4.4.0",
     "langchain-groq>=1.1.3",
+    "langchain-text-splitters>=1.1.2",
     "langgraph>=1.2.12",
     "python-dotenv>=1.2.3",
 ]
@@ -17,3 +19,7 @@ synq-ai-squad = "synq_ai_squad:main"
 [build-system]
 requires = ["uv_build>=0.12.19,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.uv]
+# Project lives in OneDrive: copy files instead of hard-linking from the uv cache
+link-mode = "copy"
