@@ -1,7 +1,7 @@
 [project]
 name = "synq-ai-squad"
 version = "0.1.0"
-description = "Add your description here"
+description = "A multi-agent AI content team (Manager, Researcher, Writer, Critic) built with LangGraph that writes marketing copy using only facts from company documents."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
