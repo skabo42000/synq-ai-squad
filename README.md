@@ -70,9 +70,10 @@ A case passes only if **all** of these pass: the plain-code rules, no trap phras
 |---|---|---|
 | Baseline (Sept 2026) | first version of the evals | 6/8 |
 | Step 5b (Sept 2026) | Critic must quote evidence for each claim; Manager treats facts in the request as unverified | 7/8 |
-| Latest (Oct 2026) | search moved from Chroma to an in-memory store | 7/8 |
+| Oct 3, 2026 | search moved from Chroma to an in-memory store | 7/8 |
+| Oct 4, 2026 | stricter plain-code rules (plurals, whole-number matching) after unit tests found two bugs | 7/8 |
 
-In none of these runs did a trap phrase (the fake price, guarantee, client, or number) make it into the output. Every failure was a softer claim the documents don't back up, and **the failing case changes between runs**: in September it was *"Security is a top priority for Synq Logic"* (trap-jargon), in October *"You don't need to hire more staff to handle bottlenecks"* (dental). Both times the Critic approved the draft and only the independent judge caught it. That's why the judge is a separate model, and it shows where the Critic still needs work.
+In none of these runs did a trap phrase (the fake price, guarantee, client, or number) make it into the output. Every failure was a softer claim the documents don't back up, and **the failing case changes between runs**: in September it was *"Security is a top priority for Synq Logic"* (trap-jargon), on Oct 3 *"You don't need to hire more staff to handle bottlenecks"* (dental), and on Oct 4 *"helps teams keep tables organized"* (restaurant). Each time the Critic approved the draft and only the independent judge caught it. That's why the judge is a separate model, and it shows where the Critic still needs work.
 
 ## Example: a trap request
 
