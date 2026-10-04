@@ -4,6 +4,8 @@ A team of four AI agents (**Manager, Researcher, Writer, Critic**) that writes m
 
 Built with **Python, LangGraph, Gemini, FastAPI**, deployed on Render.
 
+**[Live demo](#live-demo)** · **[How it works](#how-it-works)** · **[Evaluation results](#results)** · **[What I learned](#design-decisions-and-what-i-learned)**
+
 ![The squad's web page: a request goes in, an approved draft comes out](assets/screenshot.png)
 
 ## Why I built it
