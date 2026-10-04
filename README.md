@@ -1,5 +1,7 @@
 # Synq AI Squad
 
+[![tests](https://github.com/skabo42000/synq-ai-squad/actions/workflows/tests.yml/badge.svg)](https://github.com/skabo42000/synq-ai-squad/actions/workflows/tests.yml)
+
 A team of four AI agents (**Manager, Researcher, Writer, Critic**) that writes marketing content for my agency, [Synq Logic](https://synqlogic.com), using **only facts from the company's own documents**. A Critic checks every claim against the research and sends drafts back for revision, and an evaluation suite with "trap" requests measures how often fake facts still get through.
 
 Built with **Python, LangGraph, Gemini, FastAPI**, deployed on Render.
@@ -99,7 +101,7 @@ The Manager dropped the fake client and the fake number before any writing start
 
 - **Watch for stretched facts, not just invented ones.** In the first eval run, the Critic gave 10/10 to a draft saying the service *"pays for itself in the hours saved each week"*. The documents only say many owners find it *"pays for itself in time saved"*. The model hadn't made up a fact; it had quietly made a real one stronger. Two changes took the pass rate from 6/8 to 7/8. First, the Critic now quotes the evidence for each claim before it scores (`claims` comes before `score` in the output schema, so the model fills them in that order), and any claim that adds detail the evidence lacks ("each week", "every time") counts as unsupported. Second, the Manager treats facts in the request as unverified.
 - **A strict Critic can *cause* made-up facts.** If it asks for "more specific results", the only way the Writer can comply is to invent them. So the Critic is told never to ask for details the research notes don't contain.
-- **Use code where code is enough.** The number check is a few lines of regex and is 100% consistent. AI checks handle what regex can't.
+- **Use code where code is enough, and test that code.** The number check is a few lines of regex and is 100% consistent; AI checks handle what regex can't. But consistent isn't the same as correct: when I added unit tests ([`tests/`](tests/)), they found two bugs that every eval run had missed. Plural jargon ("workflows", "APIs") slipped past the banned-word check, and the number check matched substrings, so an invented "30 days" passed because the booking link contains "30min" (and "15 seconds" passed because of the phone number). Both are fixed, and the tests run on GitHub after every push.
 - **Grade with a different model.** The judge comes from a different provider and model family than the agents it grades.
 - **Pick infrastructure for the actual scale.** I started with Chroma, but its dependencies made the build too big for Render's free plan. For 28 chunks, an in-memory store is instant. At thousands of documents I'd move to something like pgvector.
 - **Respect free-tier limits.** The API runs one squad job at a time (a lock returns HTTP 429 if it's busy), and the endpoint is a plain `def`, so FastAPI runs the slow job in a worker thread and `/health` keeps answering.
@@ -108,7 +110,7 @@ The Manager dropped the fake client and the fake number before any writing start
 
 - 8 cases is a small test set, and results vary between runs (see above); more cases and several runs per change would give a more reliable pass rate.
 - Catch subtler honesty problems the evals miss today, like calling a general article a "case study".
-- Unit tests for the plain-code rules (right now they're exercised only through the evals).
+- Unit tests cover the plain-code rules and the document splitting; the agent graph itself is tested only through the evals so far.
 - Stream progress to the web page instead of waiting 30–90 seconds for the full result.
 - One small model (Gemini 3.1 Flash Lite) does every job; comparing models per role is the next experiment.
 
@@ -132,6 +134,8 @@ src/synq_ai_squad/
   hello_agent.py,        early learning steps (one-node agent, single Researcher),
   researcher.py,         kept to show how the project grew
   check_keys.py
+tests/                   unit tests for the rules and the document splitting (no AI calls)
+.github/workflows/       runs the tests on GitHub after every push
 assets/                  screenshot for this README
 render.yaml              Render deploy settings (secrets are set in Render, not here)
 ```
@@ -146,6 +150,7 @@ cd synq-ai-squad
 uv sync
 cp .env.example .env          # then add your keys to .env
 
+uv run pytest                                                        # unit tests, ~1 second, no keys needed
 uv run python -m synq_ai_squad.rag                                   # build the search index
 uv run python -m synq_ai_squad.squad "A LinkedIn post for dental clinics about missed calls"
 uv run python -m synq_ai_squad.evals                                 # all 8 cases, ~8 minutes

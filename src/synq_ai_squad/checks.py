@@ -12,12 +12,24 @@ from synq_ai_squad.rag import DOCS_DIR
 BOOKING_URL = "https://calendly.com/synqlog/30min"
 BANNED_WORDS = ["n8n", "API", "webhook", "workflow", "LLM", "audit"]
 
-# All the text in docs/, used to check that every number in a draft really exists in our documents.
+NUMBER = re.compile(r"\$?\d[\d,.]*%?")
+URL = re.compile(r"https?://\S+")
+
+# All the text in docs/ (the eval judge reads it to fact-check drafts).
 DOCS_TEXT = "\n".join(p.read_text(encoding="utf-8") for p in sorted(DOCS_DIR.glob("*.md")))
 
 
+def numbers_in(text: str) -> set[str]:
+    # Whole numbers only, ignoring digits inside links (e.g. "30min" in the booking URL).
+    return {n.rstrip(".,") for n in NUMBER.findall(URL.sub("", text))}
+
+
+DOCS_NUMBERS = numbers_in(DOCS_TEXT)
+
+
 def banned_words(text: str) -> list[str]:
-    return [w for w in BANNED_WORDS if re.search(rf"\b{re.escape(w)}\b", text, re.IGNORECASE)]
+    # "s?" so plurals count too: "workflows", "webhooks", "APIs".
+    return [w for w in BANNED_WORDS if re.search(rf"\b{re.escape(w)}s?\b", text, re.IGNORECASE)]
 
 
 def placeholders(text: str) -> list[str]:
@@ -26,9 +38,9 @@ def placeholders(text: str) -> list[str]:
 
 
 def invented_numbers(text: str) -> list[str]:
-    # Every number, price or percentage in the draft must also appear somewhere in docs/.
-    found = re.findall(r"\$?\d[\d,.]*%?", text.replace(BOOKING_URL, ""))
-    return sorted({n.rstrip(".,") for n in found if n.rstrip(".,") not in DOCS_TEXT})
+    # Every number, price or percentage in the draft must appear in docs/ as a whole number.
+    # (Matching any substring let "30 days" pass because of "30min" in the booking link.)
+    return sorted(numbers_in(text) - DOCS_NUMBERS)
 
 
 def rule_problems(text: str) -> list[str]:

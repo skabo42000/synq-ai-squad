@@ -12,9 +12,11 @@ Live: https://synq-ai-squad.onrender.com (Render free plan, auto-deploys from pr
 - `checks.py` - plain-code rules (banned words, placeholders, booking link, numbers not in docs).
 - `evals.py` - 8 test requests incl. traps; Groq judge; results in `evals/results/` (git-ignored).
 - `api.py` + `static/index.html` - FastAPI endpoint and the simple password page.
+- `tests/` - pytest unit tests for checks.py and rag splitting; `.github/workflows/tests.yml` runs them (README badge).
 
 ## Commands
 ```
+uv run pytest                                           # unit tests (~1 s, no keys); also run by GitHub Actions on every push
 uv run python -m synq_ai_squad.rag                      # rebuild search index after editing docs/
 uv run python -m synq_ai_squad.squad "your request"     # run the squad in the terminal
 uv run python -m synq_ai_squad.evals [trap]             # evaluate (all 8 cases ~8 min)
@@ -22,6 +24,7 @@ uv run uvicorn synq_ai_squad.api:app --port 8000        # local server, open htt
 ```
 
 ## Rules for changes
+- Run `uv run pytest` before every commit; add a test when changing a rule in checks.py.
 - Measure with `evals` before and after any prompt/model/retrieval change; rerun the full set, report the pass rate honestly.
 - After changing dependencies: `uv export --frozen --no-dev --no-hashes -o requirements.txt`, then commit and push (Render redeploys). Keep `numpy` as a direct dependency.
 - Secrets live only in `.env` (git-ignored) and Render env vars. Before every commit check that `.env`, `vector_store.json`, and `evals/results/` are not staged.

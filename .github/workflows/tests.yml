@@ -1,0 +1,16 @@
+# Runs the unit tests on GitHub's computers after every push and pull request.
+# No API keys needed: the tests never call an AI model.
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - run: uv sync --frozen
+      - run: uv run pytest -v

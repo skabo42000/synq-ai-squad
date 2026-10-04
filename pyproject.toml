@@ -25,3 +25,8 @@ build-backend = "uv_build"
 [tool.uv]
 # Project lives in OneDrive: copy files instead of hard-linking from the uv cache
 link-mode = "copy"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
