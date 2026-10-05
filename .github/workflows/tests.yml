@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  quality:
+  pytest:  # job id is a required status check in the "Protect main" ruleset; keep the name
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
