@@ -29,6 +29,7 @@ uv run uvicorn synq_ai_squad.api:app --port 8000        # local server, open htt
 - Upgrade plan (Senior portfolio): `~/.claude/plans/i-want-to-upgrade-transient-matsumoto.md` (Phase 0 done; next Phase 1 evals platform).
 - Measure with `evals` before and after any prompt/model/retrieval change; rerun the full set, report the pass rate honestly.
 - After changing dependencies: `uv export --frozen --no-dev --no-hashes -o requirements.txt`, then commit and push (Render redeploys). Keep `numpy` as a direct dependency.
+- `main` is protected (ruleset "Protect main - tests and security"): no direct pushes. Work on a branch, open a PR with `gh pr create`, wait for the required checks `pytest` and `secrets` (keep those job names), then `gh pr merge --rebase --delete-branch`. gh lives at `C:\Program Files\GitHub CLI\gh.exe` (not on PATH). Dependabot opens weekly update PRs.
 - Secrets live only in `.env` (git-ignored) and Render env vars. Before every commit check that `.env`, `vector_store.json`, and `evals/results/` are not staged.
 - Render status/logs: use the Render API with `RENDER_API_KEY` from `.env` (service `srv-darblimgekts738vog20`), never ask for dashboard click-lists.
 - See the global skill `langgraph-python-agent` for Windows/OneDrive and deploy gotchas.
