@@ -161,7 +161,13 @@ uv run uvicorn synq_ai_squad.api:app --port 8000                     # web page 
 
 The web server needs `SQUAD_API_KEY` in `.env` (at least 20 random characters); that's the page password.
 
-## Live demo
+## Security and data handling
+
+Read [SECURITY.md](SECURITY.md) before adding private documents or enabling a public endpoint. The API disables public schema pages, sends `no-store` responses and avoids logging provider exception text. LangSmith tracing is opt-in; the Render blueprint now defaults it off. Existing deployment environment settings must be checked separately. A shared demo password and one-job lock do not provide per-user access control, tenant isolation or durable spending limits.
+
+The offline API tests use a fake graph to check authorization, input bounds, private responses and error handling. Provider-based evaluations still require your own keys and can incur costs.
+
+## Live demo access
 
 It runs at [synq-ai-squad.onrender.com](https://synq-ai-squad.onrender.com). It's password-protected because each run makes many AI model calls on a free plan with tight limits; get in touch through [synqlogic.com](https://synqlogic.com) if you'd like access. On the free plan the server sleeps when unused, so the first load can take about a minute.
 

@@ -17,7 +17,7 @@ services:
       - key: SQUAD_API_KEY
         sync: false
       - key: LANGSMITH_TRACING
-        value: "true"
+        value: "false"
       - key: LANGSMITH_PROJECT
         value: synq-ai-squad
       - key: LANGSMITH_API_KEY

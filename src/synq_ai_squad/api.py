@@ -2,7 +2,7 @@
 
 Start the server:   uv run uvicorn synq_ai_squad.api:app --port 8000
 Use it:             http://localhost:8000        (the simple page; password = your SQUAD_API_KEY)
-Developer test page: http://localhost:8000/docs
+API documentation is disabled on the shared demo.
 
 Endpoints:
   GET  /          -> the simple page with a text box
@@ -30,7 +30,18 @@ API_KEY = os.getenv("SQUAD_API_KEY", "")
 if len(API_KEY) < 20:
     raise RuntimeError("Set SQUAD_API_KEY in .env (at least 20 random characters) before starting the server.")
 
-app = FastAPI(title="Synq AI Squad", description="Manager, Researcher, Writer and Critic, as one endpoint.")
+app = FastAPI(title="Synq AI Squad", description="Manager, Researcher, Writer and Critic, as one endpoint.",
+              docs_url=None, redoc_url=None, openapi_url=None)
+
+
+@app.middleware("http")
+async def private_responses(request, call_next):
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
 
 # Free AI plans allow only a few requests per minute, so run one squad job at a time.
 busy = threading.Lock()
@@ -83,7 +94,7 @@ def generate(body: GenerateRequest) -> GenerateResponse:
         out = graph.invoke({"request": body.request, "found": [], "rounds": 0, "scores": []})
     except Exception as e:
         # Log the details on the server, but don't leak internals to the caller.
-        print(f"  [api] squad failed: {type(e).__name__}: {e}")
+        print(f"  [api] squad failed: {type(e).__name__}")
         raise HTTPException(status_code=502, detail="The squad failed to finish. Please try again.")
     finally:
         busy.release()
