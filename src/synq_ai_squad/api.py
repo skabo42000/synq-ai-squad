@@ -25,6 +25,7 @@ from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 
 from synq_ai_squad.config import Settings, configure_logging, get_settings
+from synq_ai_squad.models import error_label
 from synq_ai_squad.squad import build_graph, initial_state
 
 log = logging.getLogger(__name__)
@@ -54,6 +55,9 @@ class GenerateResponse(BaseModel):
     critic_scores: list[int]
     critic_notes: list[str] = Field(description="Problems the Critic still saw in the final version")
     seconds: int
+    usage: dict[str, Any] | None = Field(
+        default=None, description="Routing used, tokens by role and model, estimated cost at list prices"
+    )
 
 
 def check_key(request: Request, key: str | None = Security(APIKeyHeader(name="X-API-Key", auto_error=False))) -> None:
@@ -63,7 +67,7 @@ def check_key(request: Request, key: str | None = Security(APIKeyHeader(name="X-
         raise HTTPException(status_code=401, detail="Missing or wrong X-API-Key header.")
 
 
-def create_app(settings: Settings | None = None, graph: Any = None) -> FastAPI:
+def create_app(settings: Settings | None = None, graph: Any = None, llm: Any = None) -> FastAPI:
     """Build the web app. Tests pass in their own settings and a graph that uses fake models."""
 
     @asynccontextmanager
@@ -76,11 +80,12 @@ def create_app(settings: Settings | None = None, graph: Any = None) -> FastAPI:
         if len(app.state.settings.require("squad_api_key").get_secret_value()) < MIN_PASSWORD_LENGTH:
             raise RuntimeError(f"SQUAD_API_KEY must be at least {MIN_PASSWORD_LENGTH} random characters.")
         if app.state.graph is None:
-            from synq_ai_squad.models import GeminiClient
+            from synq_ai_squad.models import ModelGateway
             from synq_ai_squad.rag import ensure_vectorstore
 
             s = app.state.settings
-            app.state.graph = build_graph(GeminiClient(s), ensure_vectorstore(s), s)
+            app.state.llm = ModelGateway(s)
+            app.state.graph = build_graph(app.state.llm, ensure_vectorstore(s), s)
         yield
 
     app = FastAPI(
@@ -93,6 +98,7 @@ def create_app(settings: Settings | None = None, graph: Any = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.graph = graph
+    app.state.llm = llm  # the model gateway, read after each run for token usage and cost
     # Free AI plans allow only a few requests per minute, so run one squad job at a time.
     app.state.busy = threading.Lock()
 
@@ -122,10 +128,12 @@ def create_app(settings: Settings | None = None, graph: Any = None) -> FastAPI:
             )
         try:
             start = time.time()
+            if hasattr(state.llm, "reset_usage"):
+                state.llm.reset_usage()
             out = state.graph.invoke(initial_state(body.request))
         except Exception as e:
             # Log only the error type: provider error text can echo request data or account details.
-            log.error("squad failed: %s", type(e).__name__)
+            log.error("squad failed: %s", error_label(e))  # type and status code only, never the message
             raise HTTPException(status_code=502, detail="The squad failed to finish. Please try again.") from e
         finally:
             state.busy.release()
@@ -140,6 +148,7 @@ def create_app(settings: Settings | None = None, graph: Any = None) -> FastAPI:
             critic_scores=out["scores"],
             critic_notes=review.issues + review.unsupported_claims,
             seconds=round(time.time() - start),
+            usage=state.llm.usage() if hasattr(state.llm, "usage") else None,
         )
 
     return app

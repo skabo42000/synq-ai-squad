@@ -24,7 +24,13 @@ class Verdict(BaseModel):
 
 
 def make_judge(settings: Settings) -> Runnable:
-    model = ChatGroq(model=settings.judge_model, temperature=0, api_key=settings.require("groq_api_key"))
+    # reasoning_effort="low" cuts the judge's tokens by about a third; use it only if calibration stays as good.
+    model = ChatGroq(
+        model=settings.judge_model,
+        temperature=0,
+        api_key=settings.require("groq_api_key"),
+        reasoning_effort=settings.judge_reasoning_effort,
+    )
     # Groq occasionally returns an empty answer; just try again.
     return model.with_structured_output(Verdict, method="json_schema").with_retry(stop_after_attempt=3)
 

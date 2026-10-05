@@ -151,7 +151,10 @@
       $("badge").textContent = d.approved ? "Approved by the Critic" : "Not approved: read carefully before using";
       $("badge").className = "badge " + (d.approved ? "ok" : "warn");
       $("meta").innerHTML = "";
-      for (const [k, v] of [["Format", d.content_format], ["For", d.audience], ["Drafts", d.critic_scores.length], ["Time", d.seconds + "s"]]) {
+      const meta = [["Format", d.content_format], ["For", d.audience], ["Drafts", d.critic_scores.length], ["Time", d.seconds + "s"]];
+      // Estimated at paid list prices; the demo itself runs on free tiers.
+      if (d.usage) meta.push(["Est. cost", "$" + Number(d.usage.est_cost_usd).toFixed(4)]);
+      for (const [k, v] of meta) {
         const b = document.createElement("b"); b.textContent = k + ": ";
         $("meta").append(b, v + "   ");
       }

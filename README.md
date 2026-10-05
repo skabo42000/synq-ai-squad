@@ -47,6 +47,15 @@ flowchart LR
 2. **Plain-code rules** ([`checks.py`](src/synq_ai_squad/checks.py)). Things code can check reliably are checked by code, not by an AI: banned jargon, leftover placeholders like `[Link]`, the booking link, and **every number in a draft must appear somewhere in the documents**.
 3. **An evidence-based Critic, plus an independent judge.** The Critic quotes evidence for each claim. The evaluations then use a judge from a **different model family** (Groq `gpt-oss-120b`), so the system isn't grading its own homework.
 
+## Model gateway: routing, fallback and cost
+
+All model calls go through one gateway ([`models.py`](src/synq_ai_squad/models.py)). The graph only says what it needs and whether this is the last chance; the gateway decides which model answers.
+
+- **Two tiers:** cheap = Gemini 3.1 Flash-Lite ($0.25 / $1.50 per million input/output tokens); strong = Qwen3.8 27B on Groq ($0.80 / $4.00). Prices are copied from the providers' pages with the date ([`pricing.py`](src/synq_ai_squad/pricing.py)). The demo runs on free tiers, so costs are estimates at list price.
+- **Routing strategies:** `all-cheap`, `all-strong`, and `cascade` (cheap first; the Writer and Critic use the strong tier only for the final round, after the cheap tier has failed twice). The default is chosen from evaluation data, not by guess.
+- **Resilience:** every call has a time limit and a retry, and if a provider fails, the same call goes to the other provider. In a test with the cheap tier deliberately broken, the squad still delivered an approved post through the backup. The day before, a real Gemini outage had caused a 502 and a 4-minute hang.
+- **Cost per request:** each API response and eval run reports tokens by role and model and the estimated cost. A first measurement: one all-strong run cost about $0.017 versus about $0.003 on the cheap tier.
+
 ## Evaluation
 
 "It looked good when I tried it" isn't proof. The evaluation platform ([`evals.py`](src/synq_ai_squad/evals.py), [`evaluation/`](src/synq_ai_squad/evaluation/)) runs the full squad on a **versioned dataset** ([`evals/dataset.yaml`](evals/dataset.yaml), 26 cases) and scores every output automatically.
@@ -120,7 +129,7 @@ The Manager dropped the fake client and the fake number before any writing start
 - 26 cases run once is still a small sample; milestone runs should use `--repeats 3`.
 - Catch subtler honesty problems the evals miss today, like calling a general article a "case study".
 - Stream progress to the web page instead of waiting 30–90 seconds for the full result.
-- One small model (Gemini 3.1 Flash Lite) does every job; comparing models per role is the next experiment.
+- The routing comparison (all-cheap vs cascade vs all-strong, same dataset) is the next measurement; free-tier daily quotas limit how many full runs fit in a day.
 
 ## Tech stack
 
@@ -137,7 +146,8 @@ knowledge/               source facts (copied from the Synq Logic website)
 src/synq_ai_squad/
   squad.py               the graph: manager -> searches -> research -> write <-> critique
   prompts.py             every prompt, as plain functions
-  models.py              the LLMClient interface and the Gemini implementation
+  models.py              model gateway: routing tiers, timeouts, fallback, usage
+  pricing.py             list prices per model, with sources
   schemas.py             structured outputs (Plan, Review, CheckedClaim)
   checks.py              plain-code rules shared by the Critic and the evals
   rag.py                 split, embed and store the documents

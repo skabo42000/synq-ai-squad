@@ -26,7 +26,6 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from langchain_core.callbacks import get_usage_metadata_callback
 from langchain_core.runnables import Runnable
 from langgraph.graph.state import CompiledStateGraph
 
@@ -45,12 +44,12 @@ from synq_ai_squad.evaluation.scoring import (
     score_draft,
     summarize,
 )
-from synq_ai_squad.squad import build_default_graph, initial_state
+from synq_ai_squad.models import ModelGateway, error_label, is_transient
+from synq_ai_squad.squad import build_default, initial_state
 
 log = logging.getLogger(__name__)
 
 RETRY_WAITS = (30, 90)  # seconds to wait before retrying a run that hit a provider outage or rate limit
-TRANSIENT_MARKERS = ("429", "503", "500", "RESOURCE_EXHAUSTED", "UNAVAILABLE", "rate limit", "overloaded", "timeout")
 # A daily allowance won't refill in 90 seconds: retrying only burns time, so the run stops instead.
 DAILY_QUOTA_MARKERS = ("per day", "perday", "tokens per day", "requests per day", "(TPD)", "(RPD)")
 EXIT_PASS, EXIT_GATE_FAILED, EXIT_BAD_INPUT, EXIT_INCONCLUSIVE = 0, 1, 2, 3
@@ -64,19 +63,20 @@ def _error_text(e: Exception) -> str:
     return f"{type(e).__name__} {getattr(e, 'code', '')} {e}".lower()
 
 
-def is_transient(e: Exception) -> bool:
-    return any(m.lower() in _error_text(e) for m in TRANSIENT_MARKERS)
-
-
 def is_daily_quota(e: Exception) -> bool:
     return any(m.lower() in _error_text(e) for m in DAILY_QUOTA_MARKERS)
 
 
-def run_once(graph: CompiledStateGraph, judge: Runnable, settings: Settings, case: Case, repeat: int) -> RunResult:
+Squad = tuple[CompiledStateGraph, ModelGateway]
+
+
+def run_once(squad: Squad, judge: Runnable, settings: Settings, case: Case, repeat: int) -> RunResult:
+    graph, gateway = squad
+    gateway.reset_usage()
     start = time.time()
-    with get_usage_metadata_callback() as usage:
-        out = graph.invoke(initial_state(case.request))
+    out = graph.invoke(initial_state(case.request))
     seconds = time.time() - start
+    usage = gateway.usage()
     failures = score_draft(case, out["draft"], unsupported_claims(judge, out["draft"]))
     return RunResult(
         case_id=case.id,
@@ -88,31 +88,31 @@ def run_once(graph: CompiledStateGraph, judge: Runnable, settings: Settings, cas
         critic_approved=out["review"].score >= settings.pass_score,
         rounds=out["rounds"],
         seconds=round(seconds, 1),
-        tokens=sum(u["total_tokens"] for u in usage.usage_metadata.values()),
+        tokens=sum(usage["tokens_by_role"].values()),
+        tokens_by_model={m: u.get("total_tokens", 0) for m, u in usage["tokens_by_model"].items()},
+        cost_usd=usage["est_cost_usd"],
         draft=out["draft"],
     )
 
 
-def run_with_retries(
-    graph: CompiledStateGraph, judge: Runnable, settings: Settings, case: Case, repeat: int
-) -> RunResult:
+def run_with_retries(squad: Squad, judge: Runnable, settings: Settings, case: Case, repeat: int) -> RunResult:
     for attempt, wait in enumerate((*RETRY_WAITS, None), start=1):
         try:
-            return run_once(graph, judge, settings, case, repeat)
+            return run_once(squad, judge, settings, case, repeat)
         except Exception as e:
             if is_daily_quota(e):
                 raise DailyQuotaExhausted(type(e).__name__) from e
             if wait is None or not is_transient(e):
                 # Record the error type only: provider messages can echo request data or account details.
-                log.warning("  %s crashed: %s", case.id, type(e).__name__)
+                log.warning("  %s crashed: %s", case.id, error_label(e))
                 return RunResult(
                     case_id=case.id,
                     category=case.category,
                     repeat=repeat,
                     passed=False,
-                    failures={"crash": [type(e).__name__]},
+                    failures={"crash": [error_label(e)]},
                 )
-            log.warning("  %s: provider unavailable (%s), retry %d in %ds", case.id, type(e).__name__, attempt, wait)
+            log.warning("  %s: provider unavailable (%s), retry %d in %ds", case.id, error_label(e), attempt, wait)
             time.sleep(wait)
     raise AssertionError("unreachable")
 
@@ -143,13 +143,13 @@ def save_outputs(stamp: str, results: list[RunResult], summary: Summary, report:
     return report_md
 
 
-def evaluate(only: str | None, repeats: int) -> int:
+def evaluate(only: str | None, repeats: int, routing: str | None) -> int:
     settings = get_settings()
     cases = load_dataset().select(only)
     if not cases:
         log.error("No cases match %r", only)
         return EXIT_BAD_INPUT
-    graph, judge = build_default_graph(settings), make_judge(settings)
+    squad, judge = build_default(settings, routing), make_judge(settings)
 
     results: list[RunResult] = []
     total = len(cases) * repeats
@@ -157,7 +157,7 @@ def evaluate(only: str | None, repeats: int) -> int:
         for repeat in range(1, repeats + 1):
             for case in cases:
                 log.info("[%d/%d] %s (repeat %d): %s", len(results) + 1, total, case.id, repeat, case.request[:70])
-                r = run_with_retries(graph, judge, settings, case, repeat)
+                r = run_with_retries(squad, judge, settings, case, repeat)
                 results.append(r)
                 reasons = [m for msgs in r.failures.values() for m in msgs]
                 log.info("    -> %s %s", "PASS" if r.passed else "FAIL", "; ".join(reasons)[:300])
@@ -172,7 +172,8 @@ def evaluate(only: str | None, repeats: int) -> int:
     meta = {
         "date": stamp,
         "commit": git_sha(),
-        "agent model": settings.agent_model,
+        "routing": squad[1].routing,
+        "models": f"cheap {settings.agent_model}, strong {settings.strong_model}",
         "judge model": settings.judge_model,
         "cases": f"{len(cases)}" + (f" (filter: {only})" if only else ""),
         "repeats": str(repeats),
@@ -222,6 +223,7 @@ def main() -> None:
     p.add_argument("only_positional", nargs="?", help=argparse.SUPPRESS)  # old style: `evals trap`
     p.add_argument("--only", help="a category name, or text that case ids must contain")
     p.add_argument("--repeats", type=int, default=1, help="run every case this many times (default 1)")
+    p.add_argument("--routing", choices=["all-cheap", "all-strong", "cascade"], help="override Settings.routing")
     p.add_argument("--compare", nargs=2, type=Path, metavar=("BEFORE.json", "AFTER.json"))
     p.add_argument("--calibrate-judge", action="store_true")
     args = p.parse_args()
@@ -230,7 +232,7 @@ def main() -> None:
         sys.exit(compare(*args.compare))
     if args.calibrate_judge:
         sys.exit(calibrate_judge())
-    sys.exit(evaluate(args.only or args.only_positional, max(1, args.repeats)))
+    sys.exit(evaluate(args.only or args.only_positional, max(1, args.repeats), args.routing))
 
 
 if __name__ == "__main__":

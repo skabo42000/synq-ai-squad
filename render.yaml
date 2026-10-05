@@ -16,6 +16,8 @@ services:
         sync: false
       - key: SQUAD_API_KEY
         sync: false
+      - key: GROQ_API_KEY  # strong tier and fallback when Gemini is down
+        sync: false
       - key: LANGSMITH_TRACING
         value: "false"
       - key: LANGSMITH_PROJECT

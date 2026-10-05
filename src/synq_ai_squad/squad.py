@@ -25,12 +25,12 @@ from typing import Annotated, Any, Protocol, TypedDict
 from langchain_core.documents import Document
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
-from langgraph.types import Send
+from langgraph.types import RetryPolicy, Send
 
 from synq_ai_squad import prompts
 from synq_ai_squad.checks import rule_problems
 from synq_ai_squad.config import Settings, configure_logging, get_settings
-from synq_ai_squad.models import GeminiClient, LLMClient
+from synq_ai_squad.models import LLMClient, ModelGateway, is_transient
 from synq_ai_squad.schemas import Plan, Review
 
 log = logging.getLogger(__name__)
@@ -88,13 +88,17 @@ def build_graph(llm: LLMClient, index: SearchIndex, settings: Settings) -> Compi
 
     def write(state: State) -> dict[str, Any]:
         prompt = prompts.writer_prompt(state["plan"], state["research"], state.get("draft", ""), state.get("review"))
-        draft = llm.text("write", prompt)
         rounds = state.get("rounds", 0) + 1
+        # The last allowed draft is the "final round": the gateway may route it to a stronger model.
+        draft = llm.text("write", prompt, final_round=rounds == settings.max_rounds)
         log.info("[write]    draft %d ready (%d words)", rounds, len(draft.split()))
         return {"draft": draft, "rounds": rounds}
 
     def critique(state: State) -> dict[str, Any]:
-        review = llm.review(prompts.critic_prompt(state["plan"], state["research"], state["draft"]))
+        final_round = state["rounds"] == settings.max_rounds
+        review = llm.review(
+            prompts.critic_prompt(state["plan"], state["research"], state["draft"]), final_round=final_round
+        )
 
         # Code checks what code can check reliably; the AI checks the rest.
         if problems := rule_problems(state["draft"]):
@@ -122,7 +126,10 @@ def build_graph(llm: LLMClient, index: SearchIndex, settings: Settings) -> Compi
 
     builder = StateGraph(State)
     builder.add_node("manager", manager)
-    builder.add_node("search", search, input_schema=SearchTask)  # receives a SearchTask via Send, not the State
+    # Search calls the embedding API, which has no backup provider: retry it on outages and rate limits.
+    search_retry = RetryPolicy(max_attempts=3, initial_interval=2.0, backoff_factor=3.0, retry_on=is_transient)
+    # receives a SearchTask via Send, not the State
+    builder.add_node("search", search, input_schema=SearchTask, retry_policy=search_retry)
     builder.add_node("research", research)
     builder.add_node("write", write)
     builder.add_node("critique", critique)
@@ -135,12 +142,16 @@ def build_graph(llm: LLMClient, index: SearchIndex, settings: Settings) -> Compi
     return builder.compile()
 
 
-def build_default_graph(settings: Settings | None = None) -> CompiledStateGraph:
-    """The real squad: Gemini for every agent, the saved search index from rag.py."""
+def build_default(
+    settings: Settings | None = None, routing: str | None = None
+) -> tuple[CompiledStateGraph, ModelGateway]:
+    """The real squad: the model gateway and the saved search index from rag.py.
+    Returns the gateway too, so callers can read token usage and cost after a run."""
     from synq_ai_squad.rag import get_vectorstore  # imported here so tests never touch the index file
 
     settings = settings or get_settings()
-    return build_graph(GeminiClient(settings), get_vectorstore(settings), settings)
+    gateway = ModelGateway(settings, routing)
+    return build_graph(gateway, get_vectorstore(settings), settings), gateway
 
 
 def main() -> None:
@@ -150,7 +161,8 @@ def main() -> None:
     request = " ".join(sys.argv[1:]) or "A LinkedIn post about why answering leads after hours wins more customers"
     print(f"Request: {request}\n", flush=True)  # flush so it shows before the progress lines
 
-    result = build_default_graph(settings).invoke(initial_state(request))
+    graph, gateway = build_default(settings)
+    result = graph.invoke(initial_state(request))
 
     r = result["review"]
     status = (
@@ -160,6 +172,8 @@ def main() -> None:
     if r.issues or r.unsupported_claims:
         print("Critic's remaining notes:", *r.issues, *r.unsupported_claims, sep="\n  - ")
     print("\n" + "=" * 60 + "\n" + result["draft"] + "\n" + "=" * 60)
+    u = gateway.usage()
+    print(f"Routing {u['routing']}: {u['tokens_by_role']} tokens by role, ~${u['est_cost_usd']:.4f} at list prices")
 
 
 if __name__ == "__main__":
