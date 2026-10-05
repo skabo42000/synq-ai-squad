@@ -43,17 +43,20 @@ class ScriptedLLM:
     def __init__(self, plan: Plan, reviews: list[Review], drafts: list[str], notes: str = "- fact [1]") -> None:
         self._plan, self._reviews, self._drafts, self._notes = plan, iter(reviews), iter(drafts), notes
         self.prompts: dict[str, list[str]] = {"plan": [], "review": [], "research": [], "write": []}
+        self.final_round_flags: dict[str, list[bool]] = {"review": [], "research": [], "write": []}
 
     def plan(self, prompt: str) -> Plan:
         self.prompts["plan"].append(prompt)
         return self._plan
 
-    def review(self, prompt: str) -> Review:
+    def review(self, prompt: str, *, final_round: bool = False) -> Review:
         self.prompts["review"].append(prompt)
+        self.final_round_flags["review"].append(final_round)
         return next(self._reviews).model_copy(deep=True)  # the graph edits reviews; keep the script clean
 
-    def text(self, role: TextRole, prompt: str) -> str:
+    def text(self, role: TextRole, prompt: str, *, final_round: bool = False) -> str:
         self.prompts[role].append(prompt)
+        self.final_round_flags[role].append(final_round)
         return self._notes if role == "research" else next(self._drafts)
 
 

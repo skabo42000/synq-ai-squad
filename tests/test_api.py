@@ -107,3 +107,20 @@ def test_the_server_refuses_to_start_with_a_weak_password(settings):
     weak = settings.model_copy(update={"squad_api_key": SecretStr("short")})
     with pytest.raises(RuntimeError, match="at least 20"), TestClient(create_app(weak, graph=NeverCalledGraph())):
         pass
+
+
+def test_each_response_reports_that_runs_usage_and_cost(settings):
+    class MeteredLLM(ScriptedLLM):
+        resets = 0
+
+        def reset_usage(self):
+            self.resets += 1
+
+        def usage(self):
+            return {"routing": "all-cheap", "tokens_by_role": {"write": 1200}, "est_cost_usd": 0.0012}
+
+    llm = MeteredLLM(make_plan(), reviews=[make_review(9)], drafts=[GOOD_DRAFT])
+    with TestClient(create_app(settings, graph=build_graph(llm, SpyIndex(), settings), llm=llm)) as c:
+        data = c.post("/generate", json=BODY, headers={"X-API-Key": PASSWORD}).json()
+    assert data["usage"]["est_cost_usd"] == 0.0012
+    assert llm.resets == 1  # counters are reset before each run, so the numbers describe only this request

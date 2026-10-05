@@ -9,6 +9,7 @@ Why a settings class instead of os.getenv() everywhere:
 import logging
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from dotenv import load_dotenv
 from pydantic import SecretStr
@@ -25,10 +26,19 @@ class Settings(BaseSettings):
     groq_api_key: SecretStr | None = None
     squad_api_key: SecretStr | None = None
 
-    # Models
-    agent_model: str = "gemini-3.1-flash-lite"
+    # Models: a cheap tier (Google) and a strong tier (Groq). They also back each other up during outages.
+    agent_model: str = "gemini-3.1-flash-lite"  # cheap tier
+    strong_model: str = "qwen/qwen3.8-27b"  # strong tier; a different family from the judge on purpose
     embedding_model: str = "gemini-embedding-001"
     judge_model: str = "openai/gpt-oss-120b"
+    judge_reasoning_effort: Literal["low", "medium", "high"] | None = (
+        "low"  # calibrated: 32/32 on 2026-10-05, ~35% fewer tokens
+    )
+
+    # Routing: which tier each call uses (see models.py). Chosen from eval data, not by guess.
+    routing: Literal["all-cheap", "all-strong", "cascade"] = "all-cheap"
+    llm_timeout_seconds: float = 45  # one model call may take at most this long...
+    llm_max_retries: int = 1  # ...and is retried this often before falling back to the other provider
 
     # Squad behaviour
     pass_score: int = 8  # the Critic must give at least this to approve

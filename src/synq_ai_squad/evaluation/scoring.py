@@ -24,6 +24,8 @@ class RunResult(BaseModel):
     rounds: int = 0
     seconds: float = 0.0
     tokens: int = 0  # agent tokens for this run (the judge is not counted)
+    tokens_by_model: dict[str, int] = {}  # which models answered: shows routing and any fallbacks
+    cost_usd: float = 0.0  # estimated at list prices (pricing.py)
     draft: str = ""
 
 
@@ -78,6 +80,9 @@ class Summary(BaseModel):
     latency_p95: float
     tokens_per_run: float
     crashes: int
+    cost_per_run: float = 0.0
+    cost_per_pass: float = 0.0  # total cost / passing runs: what one usable piece costs
+    tokens_by_model: dict[str, int] = {}
 
 
 def summarize(results: list[RunResult]) -> Summary:
@@ -105,7 +110,18 @@ def summarize(results: list[RunResult]) -> Summary:
         latency_p95=percentile([r.seconds for r in finished], 95),
         tokens_per_run=sum(r.tokens for r in finished) / len(finished) if finished else 0.0,
         crashes=len(results) - len(finished),
+        cost_per_run=sum(r.cost_usd for r in finished) / len(finished) if finished else 0.0,
+        cost_per_pass=sum(r.cost_usd for r in results) / max(1, sum(r.passed for r in results)),
+        tokens_by_model=_sum_by_model(results),
     )
+
+
+def _sum_by_model(results: list[RunResult]) -> dict[str, int]:
+    totals: dict[str, int] = defaultdict(int)
+    for r in results:
+        for model, n in r.tokens_by_model.items():
+            totals[model] += n
+    return dict(totals)
 
 
 MAX_CRASH_SHARE = 0.2  # above this, provider failures, not the squad, decide the numbers
@@ -164,6 +180,8 @@ def render_report(
         f"| Critic rejected, eval passed | {s.critic_too_strict} |",
         f"| Latency p50 / p95 | {s.latency_p50:.0f}s / {s.latency_p95:.0f}s |",
         f"| Agent tokens per run | {s.tokens_per_run:,.0f} |",
+        f"| Est. cost per run / per passing piece | ${s.cost_per_run:.5f} / ${s.cost_per_pass:.5f} |",
+        f"| Tokens by model | {', '.join(f'{m}: {n:,}' for m, n in s.tokens_by_model.items()) or '-'} |",
         f"| Crashed runs | {s.crashes} |",
         "",
         "## By category",
@@ -204,6 +222,7 @@ def render_comparison(a: Summary, b: Summary, a_name: str, b_name: str) -> str:
     lines.append(f"| Injection attacks through | {a.attacks_succeeded} → {b.attacks_succeeded} |")
     lines.append(f"| Latency p95 | {a.latency_p95:.0f}s → {b.latency_p95:.0f}s |")
     lines.append(f"| Tokens per run | {a.tokens_per_run:,.0f} → {b.tokens_per_run:,.0f} |")
+    lines.append(f"| Cost per passing piece | ${a.cost_per_pass:.5f} → ${b.cost_per_pass:.5f} |")
     moved = [c for c in sorted(set(a.by_case) & set(b.by_case)) if a.by_case[c].rate != b.by_case[c].rate]
     lines += ["", "## Cases that changed", ""]
     lines += [f"- {c}: {delta(a.by_case[c], b.by_case[c])}" for c in moved] or ["- none"]

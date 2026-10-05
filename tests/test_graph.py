@@ -75,3 +75,12 @@ def test_a_revision_shows_the_writer_its_draft_and_the_feedback(settings):
     assert "YOUR PREVIOUS DRAFT" not in first
     assert "FIRST DRAFT" in revision
     assert "Too long" in revision and "Saves 20 hours" in revision
+
+
+def test_only_the_last_allowed_round_is_flagged_as_final(settings):
+    # The gateway may send the final round to a stronger model, so the flag must be exactly right.
+    llm = ScriptedLLM(make_plan(), reviews=[make_review(5)] * 3, drafts=[GOOD_DRAFT] * 3)
+    run(llm, settings)
+    assert llm.final_round_flags["write"] == [False, False, True]
+    assert llm.final_round_flags["review"] == [False, False, True]
+    assert llm.final_round_flags["research"] == [False]
