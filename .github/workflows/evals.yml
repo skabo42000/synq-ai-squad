@@ -1,0 +1,55 @@
+# Runs the AI evaluation (real Gemini + Groq calls) and fails if the quality gate in evals/thresholds.yaml breaks.
+# It uses free-tier quota, so it does NOT run on every push: click "Run workflow" on the Actions tab, or wait
+# for the weekly run. API keys come from encrypted repository secrets; GitHub never passes them to forks.
+name: evals
+
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Category or case-id text to run (empty = the full dataset; the quality gate needs the full set)"
+        required: false
+        default: ""
+      repeats:
+        description: "Runs per case (more = more reliable numbers, more quota)"
+        required: false
+        default: "1"
+  schedule:
+    - cron: "0 6 * * 1"  # Mondays 06:00 UTC
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals  # never two eval runs at once: they would share the same rate limits
+  cancel-in-progress: false
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      LANGSMITH_TRACING: "false"
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
+      - run: uv sync --frozen
+      - name: Build the search index
+        run: uv run python -m synq_ai_squad.rag
+      - name: Run the evaluation (writes the report to this run's summary page)
+        env:
+          ONLY: ${{ inputs.only }}
+          REPEATS: ${{ inputs.repeats || '1' }}
+        run: uv run python -m synq_ai_squad.evals --repeats "$REPEATS" ${ONLY:+--only "$ONLY"}
+      - name: Keep the reports and full drafts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: eval-results
+          path: |
+            evals/reports/
+            evals/results/
+          retention-days: 30

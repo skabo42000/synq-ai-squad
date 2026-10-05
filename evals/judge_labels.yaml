@@ -1,0 +1,86 @@
+# Human labels for calibrating the eval judge ("who evaluates the evaluator?").
+# Each claim is labelled against the knowledge base in knowledge/: supported = the documents back it up.
+# `evals.py --calibrate-judge` sends each claim to the judge and reports precision / recall vs these labels.
+#
+# Drafted by Claude from the documents, then reviewed by Bosko. BORDERLINE items are the ones a reasonable
+# person could label either way; several are real claims the judge flagged in earlier eval runs.
+version: 1
+status: draft (awaiting Bosko's review)
+
+labels:
+  # ---------- supported: faithful rewording of the documents ----------
+  - claim: Synq Logic's assistants answer questions on your website, by text, and by phone.
+    supported: true
+  - claim: Our assistants can qualify leads and book appointments for you.
+    supported: true
+  - claim: The assistant hands the conversation to a real person whenever that's the better choice.
+    supported: true
+  - claim: Most businesses start with one focused project that goes live in weeks, not months.
+    supported: true
+  - claim: You don't need to be technical to use what Synq Logic builds.
+    supported: true
+  - claim: Synq Logic connects the email, calendars, booking and invoicing tools you already use.
+    supported: true
+  - claim: New leads land in your customer list automatically.
+    supported: true
+  - claim: Working with Synq Logic starts with a free strategy call.
+    supported: true
+  - claim: Automation won't replace your team; it takes the repetitive tasks off their plate.
+    supported: true
+  - claim: Reminders go out automatically, so appointment slots stay full.
+    supported: true
+  - claim: Customers can pick a time slot and it goes straight onto your calendar.
+    supported: true
+  - claim: Your weekly numbers can land in your inbox automatically.
+    supported: true
+  - claim: Synq Logic helps business owners win back 10+ hours a week.
+    supported: true
+  - claim: The cost depends on what you want automated.
+    supported: true
+  - claim: Happy customers are asked for a review right after the job.
+    supported: true
+  - claim: Automating data entry means fewer mistakes and much faster turnaround.
+    supported: true
+  - claim: Synq Logic makes your business feel more professional to every customer.
+    supported: true
+    note: from use-cases.md; the judge flagged this in the Oct 5 baseline (a real false alarm)
+
+  # ---------- unsupported: invented facts ----------
+  - claim: Synq Logic's plans start at $99 per month.
+    supported: false
+  - claim: Synq Logic guarantees 50% more bookings within 30 days.
+    supported: false
+  - claim: Smith Dental saved 20 hours a week after working with Synq Logic.
+    supported: false
+  - claim: Synq Logic integrates with Salesforce and HubSpot.
+    supported: false
+  - claim: Synq Logic has been in business for more than ten years.
+    supported: false
+  - claim: Synq Logic's assistants speak more than 30 languages.
+    supported: false
+  - claim: Setup takes less than 48 hours.
+    supported: false
+  - claim: Synq Logic is HIPAA certified.
+    supported: false
+  - claim: Every client sees results in their first month.
+    supported: false
+  - claim: Synq Logic's assistants never make mistakes.
+    supported: false
+    note: the documents only say "fewer mistakes"
+
+  # ---------- unsupported: stretched facts (BORDERLINE) ----------
+  - claim: The service pays for itself in the hours saved each week.
+    supported: false
+    note: BORDERLINE. The documents say many owners find it "pays for itself in time saved"; "each week" adds detail.
+  - claim: Security is a top priority for Synq Logic.
+    supported: false
+    note: BORDERLINE. The FAQ only says we connect only the tools needed and explain how information is handled.
+  - claim: You don't need to hire more staff to handle bottlenecks.
+    supported: false
+    note: BORDERLINE. Not stated; the documents say automation takes repetitive tasks off the team's plate.
+  - claim: Synq Logic helps restaurant teams keep tables organized.
+    supported: false
+    note: BORDERLINE. Restaurants are a listed industry, but table management is never mentioned.
+  - claim: Automation means faster turnaround on paperwork and legal filings.
+    supported: false
+    note: BORDERLINE. "Much faster turnaround" is stated for paperwork; "legal filings" is not.
