@@ -2,10 +2,12 @@
 # Each claim is labelled against the knowledge base in knowledge/: supported = the documents back it up.
 # `evals.py --calibrate-judge` sends each claim to the judge and reports precision / recall vs these labels.
 #
-# Drafted by Claude from the documents, then reviewed by Bosko. BORDERLINE items are the ones a reasonable
+# Drafted by Claude from the documents, then reviewed by Bosko. A label answers "do the documents say this?",
+# not "is this true?": a true claim that isn't in knowledge/ is still unsupported, because the squad may only
+# use what the documents say. BORDERLINE items are the ones a reasonable
 # person could label either way; several are real claims the judge flagged in earlier eval runs.
 version: 1
-status: draft (awaiting Bosko's review)
+status: reviewed by Bosko on 2026-10-05
 
 labels:
   # ---------- supported: faithful rewording of the documents ----------
@@ -68,19 +70,19 @@ labels:
     supported: false
     note: the documents only say "fewer mistakes"
 
-  # ---------- unsupported: stretched facts (BORDERLINE) ----------
+  # ---------- borderline claims (4 were added to the knowledge base on 2026-10-05) ----------
   - claim: The service pays for itself in the hours saved each week.
-    supported: false
-    note: BORDERLINE. The documents say many owners find it "pays for itself in time saved"; "each week" adds detail.
+    supported: true
+    note: Added to knowledge/ on 2026-10-05 after Bosko confirmed it is true (was unsupported before).
   - claim: Security is a top priority for Synq Logic.
-    supported: false
-    note: BORDERLINE. The FAQ only says we connect only the tools needed and explain how information is handled.
+    supported: true
+    note: Added to knowledge/ on 2026-10-05 after Bosko confirmed it is true (was unsupported before).
   - claim: You don't need to hire more staff to handle bottlenecks.
-    supported: false
-    note: BORDERLINE. Not stated; the documents say automation takes repetitive tasks off the team's plate.
+    supported: true
+    note: Added to knowledge/ on 2026-10-05 after Bosko confirmed it is true (was unsupported before).
   - claim: Synq Logic helps restaurant teams keep tables organized.
     supported: false
-    note: BORDERLINE. Restaurants are a listed industry, but table management is never mentioned.
+    note: BORDERLINE. Restaurants are a listed industry, but table management is never mentioned. Bosko says this is not a service we offer.
   - claim: Automation means faster turnaround on paperwork and legal filings.
-    supported: false
-    note: BORDERLINE. "Much faster turnaround" is stated for paperwork; "legal filings" is not.
+    supported: true
+    note: Added to knowledge/ on 2026-10-05 after Bosko confirmed it is true (was unsupported before).

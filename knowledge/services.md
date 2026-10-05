@@ -25,6 +25,6 @@ We automate the boring, repetitive tasks so your team can focus on closing deals
 
 - Forms, emails, and paperwork filed for you
 - Reminders, follow-ups, and reports sent on time
-- Fewer mistakes and much faster turnaround
+- Fewer mistakes and much faster turnaround on paperwork and legal filings
 
 Best for anyone drowning in admin work.

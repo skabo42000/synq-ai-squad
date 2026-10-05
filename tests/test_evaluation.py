@@ -195,3 +195,32 @@ def test_calibration_precision_recall_and_disagreements():
     assert c.precision == 0.5  # 1 of its 2 flags was right
     assert c.recall == 0.5  # it caught 1 of the 2 unsupported claims
     assert len(c.disagreements) == 2
+
+
+# ---------- trustworthy runs ----------
+
+
+def test_a_run_with_many_crashes_is_inconclusive_not_failed():
+    from synq_ai_squad.evaluation.scoring import inconclusive_reason
+
+    crashed = [run(f"c{i}", passed=False, crash=["GoogleRateLimitError"]) for i in range(3)]
+    s = summarize([run("ok"), *crashed])
+    assert "crashed" in inconclusive_reason(s, expected_runs=4)
+    assert "INCONCLUSIVE" in render_report(s, [run("ok"), *crashed], {"date": "d"}, [], inconclusive="quota")
+
+
+def test_a_run_stopped_early_is_inconclusive():
+    from synq_ai_squad.evaluation.scoring import inconclusive_reason
+
+    assert "stopped early" in inconclusive_reason(summarize([run("a")]), expected_runs=26)
+    assert inconclusive_reason(summarize([run("a"), run("b")]), expected_runs=2) == ""
+
+
+def test_daily_quota_errors_are_recognised_and_not_retried():
+    from synq_ai_squad.evals import is_daily_quota, is_transient
+
+    daily = Exception("Error code: 429 - Rate limit reached ... on tokens per day (TPD): Limit 200000")
+    minute = Exception("429 RESOURCE_EXHAUSTED: GenerateRequestsPerMinutePerProjectPerModel")
+    assert is_daily_quota(daily)
+    assert not is_daily_quota(minute) and is_transient(minute)
+    assert is_daily_quota(Exception("429 Quota exceeded: GenerateRequestsPerDayPerProjectPerModel-FreeTier"))

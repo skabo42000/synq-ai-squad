@@ -38,6 +38,7 @@ from synq_ai_squad.evaluation.scoring import (
     Summary,
     calibration_metrics,
     check_gate,
+    inconclusive_reason,
     is_pass,
     render_comparison,
     render_report,
@@ -50,11 +51,25 @@ log = logging.getLogger(__name__)
 
 RETRY_WAITS = (30, 90)  # seconds to wait before retrying a run that hit a provider outage or rate limit
 TRANSIENT_MARKERS = ("429", "503", "500", "RESOURCE_EXHAUSTED", "UNAVAILABLE", "rate limit", "overloaded", "timeout")
+# A daily allowance won't refill in 90 seconds: retrying only burns time, so the run stops instead.
+DAILY_QUOTA_MARKERS = ("per day", "perday", "tokens per day", "requests per day", "(TPD)", "(RPD)")
+EXIT_PASS, EXIT_GATE_FAILED, EXIT_BAD_INPUT, EXIT_INCONCLUSIVE = 0, 1, 2, 3
+
+
+class DailyQuotaExhausted(Exception):
+    pass
+
+
+def _error_text(e: Exception) -> str:
+    return f"{type(e).__name__} {getattr(e, 'code', '')} {e}".lower()
 
 
 def is_transient(e: Exception) -> bool:
-    text = f"{type(e).__name__} {getattr(e, 'code', '')} {e}"
-    return any(m.lower() in text.lower() for m in TRANSIENT_MARKERS)
+    return any(m.lower() in _error_text(e) for m in TRANSIENT_MARKERS)
+
+
+def is_daily_quota(e: Exception) -> bool:
+    return any(m.lower() in _error_text(e) for m in DAILY_QUOTA_MARKERS)
 
 
 def run_once(graph: CompiledStateGraph, judge: Runnable, settings: Settings, case: Case, repeat: int) -> RunResult:
@@ -85,6 +100,8 @@ def run_with_retries(
         try:
             return run_once(graph, judge, settings, case, repeat)
         except Exception as e:
+            if is_daily_quota(e):
+                raise DailyQuotaExhausted(type(e).__name__) from e
             if wait is None or not is_transient(e):
                 # Record the error type only: provider messages can echo request data or account details.
                 log.warning("  %s crashed: %s", case.id, type(e).__name__)
@@ -131,21 +148,26 @@ def evaluate(only: str | None, repeats: int) -> int:
     cases = load_dataset().select(only)
     if not cases:
         log.error("No cases match %r", only)
-        return 2
+        return EXIT_BAD_INPUT
     graph, judge = build_default_graph(settings), make_judge(settings)
 
     results: list[RunResult] = []
     total = len(cases) * repeats
-    for repeat in range(1, repeats + 1):
-        for case in cases:
-            log.info("[%d/%d] %s (repeat %d): %s", len(results) + 1, total, case.id, repeat, case.request[:70])
-            r = run_with_retries(graph, judge, settings, case, repeat)
-            results.append(r)
-            reasons = [m for msgs in r.failures.values() for m in msgs]
-            log.info("    -> %s %s", "PASS" if r.passed else "FAIL", "; ".join(reasons)[:300])
+    try:
+        for repeat in range(1, repeats + 1):
+            for case in cases:
+                log.info("[%d/%d] %s (repeat %d): %s", len(results) + 1, total, case.id, repeat, case.request[:70])
+                r = run_with_retries(graph, judge, settings, case, repeat)
+                results.append(r)
+                reasons = [m for msgs in r.failures.values() for m in msgs]
+                log.info("    -> %s %s", "PASS" if r.passed else "FAIL", "; ".join(reasons)[:300])
+    except DailyQuotaExhausted as e:
+        log.error("A provider's daily quota is used up (%s); stopping the run early.", e)
 
     summary = summarize(results)
-    gate = check_gate(summary, load_thresholds()) if not only else []  # the gate only applies to the full set
+    inconclusive = inconclusive_reason(summary, total)
+    # The gate only applies to a complete, trustworthy run of the full dataset.
+    gate = check_gate(summary, load_thresholds()) if not only and not inconclusive else []
     stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     meta = {
         "date": stamp,
@@ -155,12 +177,14 @@ def evaluate(only: str | None, repeats: int) -> int:
         "cases": f"{len(cases)}" + (f" (filter: {only})" if only else ""),
         "repeats": str(repeats),
     }
-    report_path = save_outputs(stamp, results, summary, render_report(summary, results, meta, gate))
+    report_path = save_outputs(stamp, results, summary, render_report(summary, results, meta, gate, inconclusive))
     print("\n" + report_path.read_text(encoding="utf-8"))
     print(f"Report: {report_path.relative_to(EVALS_DIR.parent)}")
     if only:
         print("(quality gate skipped: it only applies to the full dataset)")
-    return 1 if gate else 0
+    if inconclusive:
+        return EXIT_INCONCLUSIVE
+    return EXIT_GATE_FAILED if gate else EXIT_PASS
 
 
 def compare(a: Path, b: Path) -> int:
