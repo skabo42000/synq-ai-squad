@@ -108,6 +108,18 @@ def summarize(results: list[RunResult]) -> Summary:
     )
 
 
+MAX_CRASH_SHARE = 0.2  # above this, provider failures, not the squad, decide the numbers
+
+
+def inconclusive_reason(s: Summary, expected_runs: int) -> str:
+    """Why this run can't judge quality (provider outage, quota, early stop), or '' if it can."""
+    if s.overall.runs < expected_runs:
+        return f"stopped early: {s.overall.runs} of {expected_runs} runs finished (provider quota)"
+    if s.overall.runs and s.crashes / s.overall.runs > MAX_CRASH_SHARE:
+        return f"{s.crashes} of {s.overall.runs} runs crashed (provider errors), more than {MAX_CRASH_SHARE:.0%}"
+    return ""
+
+
 def check_gate(s: Summary, t: Thresholds) -> list[str]:
     """Every threshold the run breaks. Empty list = the quality gate passes."""
     problems = []
@@ -128,10 +140,15 @@ def _fmt(r: Rate) -> str:
     return f"{r.passed}/{r.runs} ({r.rate:.0%})"
 
 
-def render_report(s: Summary, results: list[RunResult], meta: dict[str, str], gate: list[str]) -> str:
+def render_report(
+    s: Summary, results: list[RunResult], meta: dict[str, str], gate: list[str], inconclusive: str = ""
+) -> str:
     lines = [f"# Evaluation report: {meta.get('date', '')}", ""]
     lines += [f"- **{k}:** {v}" for k, v in meta.items() if k != "date"]
-    lines += ["", f"**Quality gate: {'PASS' if not gate else 'FAIL'}**"] + [f"- {p}" for p in gate]
+    if inconclusive:
+        lines += ["", f"**Quality gate: INCONCLUSIVE** ({inconclusive}). These numbers don't measure the squad."]
+    else:
+        lines += ["", f"**Quality gate: {'PASS' if not gate else 'FAIL'}**"] + [f"- {p}" for p in gate]
     spread = ", ".join(f"{x:.0%}" for x in s.per_repeat)
     lines += [
         "",
