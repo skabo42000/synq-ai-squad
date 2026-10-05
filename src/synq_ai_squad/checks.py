@@ -7,7 +7,7 @@ Used in two places:
 
 import re
 
-from synq_ai_squad.rag import DOCS_DIR
+from synq_ai_squad.config import KNOWLEDGE_DIR
 
 BOOKING_URL = "https://calendly.com/synqlog/30min"
 BANNED_WORDS = ["n8n", "API", "webhook", "workflow", "LLM", "audit"]
@@ -15,8 +15,8 @@ BANNED_WORDS = ["n8n", "API", "webhook", "workflow", "LLM", "audit"]
 NUMBER = re.compile(r"\$?\d[\d,.]*%?")
 URL = re.compile(r"https?://\S+")
 
-# All the text in docs/ (the eval judge reads it to fact-check drafts).
-DOCS_TEXT = "\n".join(p.read_text(encoding="utf-8") for p in sorted(DOCS_DIR.glob("*.md")))
+# All the text in knowledge/ (the eval judge reads it to fact-check drafts).
+DOCS_TEXT = "\n".join(p.read_text(encoding="utf-8") for p in sorted(KNOWLEDGE_DIR.glob("*.md")))
 
 
 def numbers_in(text: str) -> set[str]:
@@ -38,7 +38,7 @@ def placeholders(text: str) -> list[str]:
 
 
 def invented_numbers(text: str) -> list[str]:
-    # Every number, price or percentage in the draft must appear in docs/ as a whole number.
+    # Every number, price or percentage in the draft must appear in knowledge/ as a whole number.
     # (Matching any substring let "30 days" pass because of "30min" in the booking link.)
     return sorted(numbers_in(text) - DOCS_NUMBERS)
 

@@ -3,13 +3,14 @@
 Only the splitting is tested here; embedding needs an API key and is covered by the evals.
 """
 
-from synq_ai_squad.rag import DOCS_DIR, load_and_split
+from synq_ai_squad.config import KNOWLEDGE_DIR
+from synq_ai_squad.rag import load_and_split
 
 
 def test_every_document_is_split_into_sections():
     chunks = load_and_split()
     sources = {c.metadata["source"] for c in chunks}
-    assert sources == {p.name for p in DOCS_DIR.glob("*.md")}
+    assert sources == {p.name for p in KNOWLEDGE_DIR.glob("*.md")}
     assert len(chunks) >= 20  # 28 today; a big drop means the splitting broke
 
 

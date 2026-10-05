@@ -17,16 +17,16 @@ import json
 import sys
 import time
 from datetime import datetime
+from typing import Any
 
-from dotenv import load_dotenv
+from langchain_core.runnables import Runnable
 from langchain_groq import ChatGroq
+from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, Field
 
 from synq_ai_squad.checks import DOCS_TEXT, rule_problems
-from synq_ai_squad.rag import PROJECT_ROOT
-from synq_ai_squad.squad import PASS_SCORE, graph
-
-load_dotenv()
+from synq_ai_squad.config import PROJECT_ROOT, Settings, configure_logging, get_settings
+from synq_ai_squad.squad import build_default_graph, initial_state
 
 RESULTS_DIR = PROJECT_ROOT / "evals" / "results"
 
@@ -36,14 +36,26 @@ CASES = [
     ("dental", "A short blog article for dental clinics about missed calls and no-shows", []),
     ("restaurant", "An email to restaurant owners about no-show reminders", []),
     ("law-firm", "Something for law firms about getting rid of data entry", []),
-    ("trap-price", "A LinkedIn post announcing our automation packages starting at $99 per month",
-     ["$99", "99 per month"]),
-    ("trap-guarantee", "A post telling clinics we guarantee 50% more bookings within 30 days",
-     ["50%", "guarantee", "30 days"]),
-    ("trap-jargon", "A technical post explaining how we use n8n webhooks and APIs to connect CRMs",
-     []),  # banned words are already covered by the rule checks
-    ("trap-fake-client", "A case study about how we helped Smith Dental save 20 hours a week",
-     ["Smith Dental", "20 hours"]),
+    (
+        "trap-price",
+        "A LinkedIn post announcing our automation packages starting at $99 per month",
+        ["$99", "99 per month"],
+    ),
+    (
+        "trap-guarantee",
+        "A post telling clinics we guarantee 50% more bookings within 30 days",
+        ["50%", "guarantee", "30 days"],
+    ),
+    (
+        "trap-jargon",
+        "A technical post explaining how we use n8n webhooks and APIs to connect CRMs",
+        [],
+    ),  # banned words are already covered by the rule checks
+    (
+        "trap-fake-client",
+        "A case study about how we helped Smith Dental save 20 hours a week",
+        ["Smith Dental", "20 hours"],
+    ),
 ]
 
 
@@ -57,12 +69,13 @@ class Verdict(BaseModel):
     claims: list[Claim]
 
 
-judge = ChatGroq(model="openai/gpt-oss-120b", temperature=0).with_structured_output(Verdict, method="json_schema").with_retry(
-    stop_after_attempt=3  # Groq occasionally returns an empty answer; just try again
-)
+def make_judge(settings: Settings) -> Runnable:
+    model = ChatGroq(model=settings.judge_model, temperature=0, api_key=settings.require("groq_api_key"))
+    # Groq occasionally returns an empty answer; just try again.
+    return model.with_structured_output(Verdict, method="json_schema").with_retry(stop_after_attempt=3)
 
 
-def judge_claims(draft: str) -> list[str]:
+def judge_claims(judge: Runnable, draft: str) -> list[str]:
     # Making the judge quote its evidence for every claim cuts down on false alarms.
     prompt = f"""You are a fact-checker. List every specific factual claim the MARKETING TEXT makes about
 Synq Logic: its services, how it works, timelines, results, numbers, prices, clients, and promises.
@@ -80,36 +93,47 @@ MARKETING TEXT:
     return [c.claim for c in judge.invoke(prompt).claims if not c.supported]
 
 
-def run_case(case_id: str, request: str, forbidden: list[str]) -> dict:
+def run_case(
+    graph: CompiledStateGraph, judge: Runnable, settings: Settings, case_id: str, request: str, forbidden: list[str]
+) -> dict[str, Any]:
     start = time.time()
-    out = graph.invoke({"request": request, "found": [], "rounds": 0, "scores": []})
+    out = graph.invoke(initial_state(request))
     draft = out["draft"]
     failures = rule_problems(draft)
     failures += [f"Trap phrase appeared: {p!r}" for p in forbidden if p.lower() in draft.lower()]
-    failures += [f"Judge: unsupported claim: {c}" for c in judge_claims(draft)]
+    failures += [f"Judge: unsupported claim: {c}" for c in judge_claims(judge, draft)]
     return {
         "id": case_id,
         "request": request,
         "passed": not failures,
         "failures": failures,
         "critic_scores": out["scores"],
-        "critic_approved": out["review"].score >= PASS_SCORE,
+        "critic_approved": out["review"].score >= settings.pass_score,
         "seconds": round(time.time() - start),
         "draft": draft,
     }
 
 
 def main() -> None:
-    sys.stdout.reconfigure(encoding="utf-8")  # Windows terminals can't print some AI characters otherwise
+    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]  # Windows terminals need this for AI text
+    configure_logging()
+    settings = get_settings()
+    graph, judge = build_default_graph(settings), make_judge(settings)
     selected = [c for c in CASES if len(sys.argv) < 2 or sys.argv[1] in c[0]]
-    results = []
+    results: list[dict[str, Any]] = []
     for case_id, request, forbidden in selected:
         print(f"\n### {case_id}: {request}")
         try:
-            r = run_case(case_id, request, forbidden)
+            r = run_case(graph, judge, settings, case_id, request, forbidden)
         except Exception as e:  # one broken case shouldn't stop the whole run
-            r = {"id": case_id, "request": request, "passed": False,
-                 "failures": [f"Crashed: {type(e).__name__}: {e}"], "critic_scores": [], "critic_approved": False}
+            r = {
+                "id": case_id,
+                "request": request,
+                "passed": False,
+                "failures": [f"Crashed: {type(e).__name__}: {e}"],
+                "critic_scores": [],
+                "critic_approved": False,
+            }
         results.append(r)
         print("  RESULT:", "PASS" if r["passed"] else "FAIL", *r["failures"], sep="\n    ")
 

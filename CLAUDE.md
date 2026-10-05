@@ -1,30 +1,32 @@
 # Synq AI Squad
 
-A learning project: a multi-agent content team (Manager, Researcher, Writer, Critic) built with Python + LangGraph. It writes marketing content for Synq Logic using only facts from `docs/`. Owner is learning AI engineering: explain changes in plain English and teach the concept behind each one.
+A learning project: a multi-agent content team (Manager, Researcher, Writer, Critic) built with Python + LangGraph. It writes marketing content for Synq Logic using only facts from `knowledge/`. Owner is learning AI engineering: explain changes in plain English and teach the concept behind each one.
 
 Live: https://synq-ai-squad.onrender.com (Render free plan, auto-deploys from private GitHub `skabo42000/synq-ai-squad`, branch `main`). Page password = `SQUAD_API_KEY`.
 
 ## Layout
-- `docs/` - source facts (copied word for word from the Synq Logic website). Never add invented claims here.
-- `src/synq_ai_squad/rag.py` - split docs, embed, save `vector_store.json` (in-memory store, rebuilt at deploy).
-- `researcher.py` - Step 2 single Researcher demo. `hello_agent.py`, `check_keys.py` - Step 1.
-- `squad.py` - the full graph: manager -> parallel `search` (Send) -> research -> write <-> critique.
+- `knowledge/` - source facts (copied word for word from the Synq Logic website). Never add invented claims here.
+- `src/synq_ai_squad/rag.py` - split, embed, save `vector_store.json` (in-memory store, rebuilt at deploy).
+- `squad.py` - `build_graph(llm, index, settings)`: manager -> parallel `search` (Send) -> research -> write <-> critique. No work at import time.
+- `prompts.py` (all prompts as pure functions), `models.py` (`LLMClient` protocol + `GeminiClient`), `schemas.py`, `config.py` (pydantic-settings; `Settings.require()` returns SecretStr).
+- `examples/` - early learning steps; `scripts/check_keys.py` - list models a key can use.
 - `checks.py` - plain-code rules (banned words, placeholders, booking link, numbers not in docs).
 - `evals.py` - 8 test requests incl. traps; Groq judge; results in `evals/results/` (git-ignored).
-- `api.py` + `static/index.html` - FastAPI endpoint and the simple password page.
-- `tests/` - pytest unit tests for checks.py and rag splitting; `.github/workflows/tests.yml` runs them (README badge).
+- `api.py` + `static/index.html` - `create_app(settings, graph)` factory; the real graph is built in the lifespan.
+- `tests/` - pytest with a scripted fake LLM (`conftest.py`): rules, splitting, graph control flow, API. CI (`tests.yml`) runs ruff, mypy, pytest+coverage, Docker build.
 
 ## Commands
 ```
-uv run pytest                                           # unit tests (~1 s, no keys); also run by GitHub Actions on every push
-uv run python -m synq_ai_squad.rag                      # rebuild search index after editing docs/
+uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest   # what CI runs (no keys)
+uv run python -m synq_ai_squad.rag                      # rebuild search index after editing knowledge/
 uv run python -m synq_ai_squad.squad "your request"     # run the squad in the terminal
 uv run python -m synq_ai_squad.evals [trap]             # evaluate (all 8 cases ~8 min)
 uv run uvicorn synq_ai_squad.api:app --port 8000        # local server, open http://localhost:8000
 ```
 
 ## Rules for changes
-- Run `uv run pytest` before every commit; add a test when changing a rule in checks.py.
+- Run the CI command above before every commit; add a test when changing a rule or graph behaviour. Prompt edits are behaviour changes: measure with evals.
+- Upgrade plan (Senior portfolio): `~/.claude/plans/i-want-to-upgrade-transient-matsumoto.md` (Phase 0 done; next Phase 1 evals platform).
 - Measure with `evals` before and after any prompt/model/retrieval change; rerun the full set, report the pass rate honestly.
 - After changing dependencies: `uv export --frozen --no-dev --no-hashes -o requirements.txt`, then commit and push (Render redeploys). Keep `numpy` as a direct dependency.
 - Secrets live only in `.env` (git-ignored) and Render env vars. Before every commit check that `.env`, `vector_store.json`, and `evals/results/` are not staged.

@@ -1,0 +1,14 @@
+# Never send secrets, local environments or generated files into the image.
+.env
+.env.*
+.venv
+.git
+.github
+.vscode
+**/__pycache__
+vector_store.json
+evals/results
+tests
+examples
+scripts
+assets
