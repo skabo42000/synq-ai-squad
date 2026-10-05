@@ -6,7 +6,7 @@ A team of four AI agents (**Manager, Researcher, Writer, Critic**) that writes m
 
 Built with **Python, LangGraph, Gemini, FastAPI**, deployed on Render.
 
-**[Live demo](#live-demo)** · **[How it works](#how-it-works)** · **[Evaluation results](#results)** · **[What I learned](#design-decisions-and-what-i-learned)**
+**[Live demo](#live-demo-access)** · **[How it works](#how-it-works)** · **[Evaluation results](#results)** · **[What I learned](#design-decisions-and-what-i-learned)**
 
 ![The squad's web page: a request goes in, an approved draft comes out](assets/screenshot.png)
 
@@ -43,7 +43,7 @@ flowchart LR
 
 ## Keeping it honest: three layers
 
-1. **Grounding (RAG).** The 5 source documents in [`docs/`](docs/) are split by heading into 28 chunks, each tagged with its document title, embedded with Gemini, and kept in a small in-memory vector store. The agents only see what the search returns.
+1. **Grounding (RAG).** The 5 source documents in [`knowledge/`](knowledge/) are split by heading into 28 chunks, each tagged with its document title, embedded with Gemini, and kept in a small in-memory vector store. The agents only see what the search returns.
 2. **Plain-code rules** ([`checks.py`](src/synq_ai_squad/checks.py)). Things code can check reliably are checked by code, not by an AI: banned jargon, leftover placeholders like `[Link]`, the booking link, and **every number in a draft must appear somewhere in the documents**.
 3. **An evidence-based Critic, plus an independent judge.** The Critic quotes evidence for each claim. The evaluations then use a judge from a **different model family** (Groq `gpt-oss-120b`), so the system isn't grading its own homework.
 
@@ -72,8 +72,9 @@ A case passes only if **all** of these pass: the plain-code rules, no trap phras
 | Step 5b (Sept 2026) | Critic must quote evidence for each claim; Manager treats facts in the request as unverified | 7/8 |
 | Oct 3, 2026 | search moved from Chroma to an in-memory store | 7/8 |
 | Oct 4, 2026 | stricter plain-code rules (plurals, whole-number matching) after unit tests found two bugs | 7/8 |
+| Oct 5, 2026 | restructured for testability (injected AI client, prompts module, config); prompts verified unchanged | 7/8 |
 
-In none of these runs did a trap phrase (the fake price, guarantee, client, or number) make it into the output. Every failure was a softer claim the documents don't back up, and **the failing case changes between runs**: in September it was *"Security is a top priority for Synq Logic"* (trap-jargon), on Oct 3 *"You don't need to hire more staff to handle bottlenecks"* (dental), and on Oct 4 *"helps teams keep tables organized"* (restaurant). Each time the Critic approved the draft and only the independent judge caught it. That's why the judge is a separate model, and it shows where the Critic still needs work.
+In none of these runs did a trap phrase (the fake price, guarantee, client, or number) make it into the output. Every failure was a softer claim the documents don't back up, and **the failing case changes between runs**: in September it was *"Security is a top priority for Synq Logic"* (trap-jargon), on Oct 3 *"You don't need to hire more staff to handle bottlenecks"* (dental), on Oct 4 *"helps teams keep tables organized"* (restaurant), and on Oct 5 *"faster turnaround times on paperwork and filings"* (law-firm). Each time the Critic approved the draft and only the independent judge caught it. That's why the judge is a separate model, and it shows where the Critic still needs work.
 
 ## Example: a trap request
 
@@ -105,13 +106,13 @@ The Manager dropped the fake client and the fake number before any writing start
 - **Use code where code is enough, and test that code.** The number check is a few lines of regex and is 100% consistent; AI checks handle what regex can't. But consistent isn't the same as correct: when I added unit tests ([`tests/`](tests/)), they found two bugs that every eval run had missed. Plural jargon ("workflows", "APIs") slipped past the banned-word check, and the number check matched substrings, so an invented "30 days" passed because the booking link contains "30min" (and "15 seconds" passed because of the phone number). Both are fixed, and the tests run on GitHub after every push.
 - **Grade with a different model.** The judge comes from a different provider and model family than the agents it grades.
 - **Pick infrastructure for the actual scale.** I started with Chroma, but its dependencies made the build too big for Render's free plan. For 28 chunks, an in-memory store is instant. At thousands of documents I'd move to something like pgvector.
+- **Make the AI swappable, so the logic is testable.** The graph never creates a model itself: `build_graph()` receives an `LLMClient` (three methods: `plan`, `review`, `text`) and a search index. In production that's Gemini; in the tests it's a scripted fake, so the loop, the score overrides, the parallel fan-out and the API's error handling are all tested in about a second with no keys. Prompts live in one file as plain functions. When I moved them there, a script compared every prompt with the previous version on the same inputs to prove the refactor didn't change what the models read.
 - **Respect free-tier limits.** The API runs one squad job at a time (a lock returns HTTP 429 if it's busy), and the endpoint is a plain `def`, so FastAPI runs the slow job in a worker thread and `/health` keeps answering.
 
 ### Limitations and what I'd do next
 
 - 8 cases is a small test set, and results vary between runs (see above); more cases and several runs per change would give a more reliable pass rate.
 - Catch subtler honesty problems the evals miss today, like calling a general article a "case study".
-- Unit tests cover the plain-code rules and the document splitting; the agent graph itself is tested only through the evals so far.
 - Stream progress to the web page instead of waiting 30–90 seconds for the full result.
 - One small model (Gemini 3.1 Flash Lite) does every job; comparing models per role is the next experiment.
 
@@ -120,24 +121,28 @@ The Manager dropped the fake client and the fake number before any writing start
 - **Agents:** LangGraph (state graph, conditional edges, `Send` fan-out, reducers), LangChain, Pydantic structured output
 - **Models:** Gemini 3.1 Flash Lite (all four agents), `gemini-embedding-001` (search), Groq `gpt-oss-120b` (eval judge)
 - **API and UI:** FastAPI with API-key auth, input validation and a busy guard, plus a single-file HTML page
+- **Engineering:** pytest (unit tests with a scripted fake AI), ruff, mypy, coverage, GitHub Actions, Docker, pydantic-settings
 - **Tooling and hosting:** Python 3.12, uv, Render (free plan), optional LangSmith tracing
 
 ## Project layout
 
 ```
-docs/                    source facts (copied from the Synq Logic website)
+knowledge/               source facts (copied from the Synq Logic website)
 src/synq_ai_squad/
-  rag.py                 split, embed and store the documents
-  squad.py               the full graph: manager -> searches -> research -> write <-> critique
+  squad.py               the graph: manager -> searches -> research -> write <-> critique
+  prompts.py             every prompt, as plain functions
+  models.py              the LLMClient interface and the Gemini implementation
+  schemas.py             structured outputs (Plan, Review, CheckedClaim)
   checks.py              plain-code rules shared by the Critic and the evals
+  rag.py                 split, embed and store the documents
+  config.py              typed settings from environment variables
   evals.py               8 test requests, trap phrases, independent judge
-  api.py                 FastAPI endpoint (+ static/index.html, the web page)
-  hello_agent.py,        early learning steps (one-node agent, single Researcher),
-  researcher.py,         kept to show how the project grew
-  check_keys.py
-tests/                   unit tests for the rules and the document splitting (no AI calls)
-.github/workflows/       runs the tests on GitHub after every push
-assets/                  screenshot for this README
+  api.py                 FastAPI app factory (+ static/index.html, the web page)
+tests/                   unit tests with a scripted fake AI (no keys, no cost)
+examples/                early learning steps (one-node agent, single Researcher)
+scripts/check_keys.py    lists the models each API key can use
+.github/workflows/       lint, type check, tests and a Docker build on every push
+Dockerfile               multi-stage image, runs as a non-root user
 render.yaml              Render deploy settings (secrets are set in Render, not here)
 ```
 
@@ -159,6 +164,8 @@ uv run python -m synq_ai_squad.evals trap                            # only the 
 uv run uvicorn synq_ai_squad.api:app --port 8000                     # web page at http://localhost:8000
 ```
 
+Or with Docker: `docker build -t synq-ai-squad . && docker run -p 8000:8000 --env-file .env synq-ai-squad` (the search index is built on first start).
+
 The web server needs `SQUAD_API_KEY` in `.env` (at least 20 random characters); that's the page password.
 
 ## Security and data handling
@@ -177,4 +184,4 @@ This is a learning project. The [commit history](https://github.com/skabo42000/s
 
 ## License
 
-The code is under the [MIT License](LICENSE). The text in [`docs/`](docs/) is Synq Logic's website copy and is not covered by that license.
+The code is under the [MIT License](LICENSE). The text in [`knowledge/`](knowledge/) is Synq Logic's website copy and is not covered by that license.

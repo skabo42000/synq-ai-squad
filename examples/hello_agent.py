@@ -1,6 +1,6 @@
 """Step 1: your first LangGraph agent (one node).
 
-Run:  uv run python -m synq_ai_squad.hello_agent "What is RAG?"
+Run:  uv run python examples/hello_agent.py "What is RAG?"
 
 The three core LangGraph ideas, all in this file:
   1. STATE - a shared "notebook" every agent reads and writes.

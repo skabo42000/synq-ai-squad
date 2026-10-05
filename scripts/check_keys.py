@@ -1,6 +1,6 @@
 """Check which AI models your API keys can actually use.
 
-Run:  uv run python -m synq_ai_squad.check_keys
+Run:  uv run python scripts/check_keys.py
 It never prints the keys themselves, only whether they work.
 """
 

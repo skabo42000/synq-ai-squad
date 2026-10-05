@@ -1,6 +1,6 @@
 """Step 2b: the RAG Researcher agent (two nodes).
 
-Run:  uv run python -m synq_ai_squad.researcher "What services do you offer?"
+Run:  uv run python examples/researcher.py "What services do you offer?"
 (Run `uv run python -m synq_ai_squad.rag` first to build the database.)
 
 Graph:  START -> retrieve -> answer -> END
@@ -29,7 +29,7 @@ TOP_K = 4  # how many chunks to hand to the model
 class State(TypedDict):
     question: str
     sources: list[Document]  # filled in by "retrieve"
-    answer: str              # filled in by "answer"
+    answer: str  # filled in by "answer"
 
 
 def retrieve(state: State) -> dict:
@@ -55,7 +55,7 @@ Answer the question using ONLY the numbered sources below.
 SOURCES:
 {context}
 
-QUESTION: {state['question']}"""
+QUESTION: {state["question"]}"""
     return {"answer": llm.invoke(prompt).text}
 
 

@@ -1,5 +1,5 @@
-# Runs the unit tests on GitHub's computers after every push and pull request.
-# No API keys needed: the tests never call an AI model.
+# Runs on GitHub's computers after every push and pull request. No API keys needed:
+# the tests use a scripted fake AI, so nothing here calls a real model or costs anything.
 name: tests
 
 on:
@@ -10,10 +10,33 @@ permissions:
   contents: read
 
 jobs:
-  pytest:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # this action only publishes exact version tags
       - run: uv sync --frozen
-      - run: uv run pytest -v
+      - name: Lint
+        run: uv run ruff check .
+      - name: Formatting
+        run: uv run ruff format --check .
+      - name: Type check
+        run: uv run mypy
+      - name: Unit tests with coverage
+        run: uv run pytest -v --cov=synq_ai_squad --cov-report=term-missing
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Build the image
+        run: docker build -t synq-ai-squad .
+      - name: Smoke test (the app imports and finds its files inside the container)
+        run: |
+          docker run --rm synq-ai-squad python -c "
+          from synq_ai_squad.api import app, PAGE
+          from synq_ai_squad.config import KNOWLEDGE_DIR
+          from synq_ai_squad.rag import load_and_split
+          assert 'Synq Content Squad' in PAGE
+          print(len(load_and_split()), 'sections found in', KNOWLEDGE_DIR)
+          "

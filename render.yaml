@@ -5,7 +5,7 @@ services:
     name: synq-ai-squad
     runtime: python
     plan: free
-    # 1) install the exact package versions, 2) build the search database from docs/
+    # 1) install the exact package versions, 2) build the search index from knowledge/
     buildCommand: pip install -r requirements.txt && python -m synq_ai_squad.rag
     startCommand: uvicorn synq_ai_squad.api:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
