@@ -125,3 +125,11 @@ def test_unknown_models_cost_nothing_rather_than_crashing():
 def test_every_configured_model_has_a_price(settings):
     for model in (settings.agent_model, settings.strong_model, settings.judge_model):
         assert model in PRICES
+
+
+def test_fallback_can_be_switched_off_for_pure_measurements(keys):
+    gw = ModelGateway(keys.model_copy(update={"llm_fallback": False}), routing="all-cheap")
+    gw._models[("write", "cheap")] = ProviderDown()
+    gw._models[("write", "strong")] = FakeListChatModel(responses=["should not be used"])
+    with pytest.raises(RuntimeError, match="503"):
+        gw.text("write", "Write a post")

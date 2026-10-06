@@ -125,14 +125,17 @@ def build_graph(llm: LLMClient, index: SearchIndex, settings: Settings) -> Compi
         return "revise"
 
     builder = StateGraph(State)
-    builder.add_node("manager", manager)
+    # If a model call still fails after the gateway's own retry and fallback (typically both providers on a
+    # per-minute limit), wait for the limit window to pass and run the whole step once more.
+    step_retry = RetryPolicy(max_attempts=2, initial_interval=settings.step_retry_wait_seconds, retry_on=is_transient)
+    builder.add_node("manager", manager, retry_policy=step_retry)
     # Search calls the embedding API, which has no backup provider: retry it on outages and rate limits.
     search_retry = RetryPolicy(max_attempts=3, initial_interval=2.0, backoff_factor=3.0, retry_on=is_transient)
     # receives a SearchTask via Send, not the State
     builder.add_node("search", search, input_schema=SearchTask, retry_policy=search_retry)
-    builder.add_node("research", research)
-    builder.add_node("write", write)
-    builder.add_node("critique", critique)
+    builder.add_node("research", research, retry_policy=step_retry)
+    builder.add_node("write", write, retry_policy=step_retry)
+    builder.add_node("critique", critique, retry_policy=step_retry)
     builder.add_edge(START, "manager")
     builder.add_conditional_edges("manager", launch_searches, ["search"])  # fan-out
     builder.add_edge("search", "research")  # fan-in: waits for all searches

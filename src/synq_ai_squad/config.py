@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     routing: Literal["all-cheap", "all-strong", "cascade"] = "all-cheap"
     llm_timeout_seconds: float = 45  # one model call may take at most this long...
     llm_max_retries: int = 1  # ...and is retried this often before falling back to the other provider
+    llm_fallback: bool = True  # switch to the other provider on failure (evals turn it off to measure a tier purely)
+    step_retry_wait_seconds: float = 20  # if both providers fail on a per-minute limit, wait this long and retry once
 
     # Squad behaviour
     pass_score: int = 8  # the Critic must give at least this to approve
