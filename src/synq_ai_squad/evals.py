@@ -172,7 +172,7 @@ def evaluate(only: str | None, repeats: int, routing: str | None) -> int:
     meta = {
         "date": stamp,
         "commit": git_sha(),
-        "routing": squad[1].routing,
+        "routing": squad[1].routing + ("" if squad[1].fallback else " (no fallback)"),
         "models": f"cheap {settings.agent_model}, strong {settings.strong_model}",
         "judge model": settings.judge_model,
         "cases": f"{len(cases)}" + (f" (filter: {only})" if only else ""),
@@ -224,6 +224,9 @@ def main() -> None:
     p.add_argument("--only", help="a category name, or text that case ids must contain")
     p.add_argument("--repeats", type=int, default=1, help="run every case this many times (default 1)")
     p.add_argument("--routing", choices=["all-cheap", "all-strong", "cascade"], help="override Settings.routing")
+    p.add_argument(
+        "--no-fallback", action="store_true", help="measure the routing purely: no switch to the other provider"
+    )
     p.add_argument("--compare", nargs=2, type=Path, metavar=("BEFORE.json", "AFTER.json"))
     p.add_argument("--calibrate-judge", action="store_true")
     args = p.parse_args()
@@ -232,6 +235,8 @@ def main() -> None:
         sys.exit(compare(*args.compare))
     if args.calibrate_judge:
         sys.exit(calibrate_judge())
+    if args.no_fallback:
+        os.environ["LLM_FALLBACK"] = "false"  # read by get_settings()
     sys.exit(evaluate(args.only or args.only_positional, max(1, args.repeats), args.routing))
 
 

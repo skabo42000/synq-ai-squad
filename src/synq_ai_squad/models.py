@@ -77,6 +77,7 @@ class ModelGateway:
 
     def __init__(self, settings: Settings, routing: str | None = None) -> None:
         self.routing = routing or settings.routing
+        self.fallback = settings.llm_fallback
         self._models: dict[tuple[Role, Tier], BaseChatModel] = {}
         for role, temperature in TEMPERATURE.items():
             self._models[(role, "cheap")] = ChatGoogleGenerativeAI(
@@ -117,7 +118,7 @@ class ModelGateway:
             return model.with_structured_output(schema) if schema else model
 
         primary = wrap(self._models[(role, tier)])
-        backup = self._models.get((role, "strong" if tier == "cheap" else "cheap"))
+        backup = self._models.get((role, "strong" if tier == "cheap" else "cheap")) if self.fallback else None
         # with_fallbacks: if the primary provider raises (outage, rate limit, timeout, unusable output),
         # the same prompt goes to the other provider instead of failing the whole request.
         return primary.with_fallbacks([wrap(backup)]) if backup else primary

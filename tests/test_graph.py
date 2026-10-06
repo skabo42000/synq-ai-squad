@@ -4,6 +4,7 @@ These check the logic around the AI: when the loop stops, when code overrides th
 how many searches run, and what the Writer is told on a revision. No keys, no cost.
 """
 
+import pytest
 from conftest import GOOD_DRAFT, ScriptedLLM, SpyIndex, make_plan, make_review
 
 from synq_ai_squad.squad import build_graph, initial_state
@@ -84,3 +85,33 @@ def test_only_the_last_allowed_round_is_flagged_as_final(settings):
     assert llm.final_round_flags["write"] == [False, False, True]
     assert llm.final_round_flags["review"] == [False, False, True]
     assert llm.final_round_flags["research"] == [False]
+
+
+def test_a_step_that_hits_a_rate_limit_is_retried_once(settings):
+    class RateLimitedOnce(ScriptedLLM):
+        failed = False
+
+        def text(self, role, prompt, *, final_round=False):
+            if role == "write" and not self.failed:
+                self.failed = True
+                raise RuntimeError("429 rate limit: tokens per minute")
+            return super().text(role, prompt, final_round=final_round)
+
+    llm = RateLimitedOnce(make_plan(), reviews=[make_review(9)], drafts=[GOOD_DRAFT])
+    fast = settings.model_copy(update={"step_retry_wait_seconds": 0.01})
+    out = run(llm, fast)
+    assert out["draft"] == GOOD_DRAFT and out["rounds"] == 1  # the retry succeeded and counted as one round
+
+
+def test_a_real_bug_is_not_retried(settings):
+    class Broken(ScriptedLLM):
+        calls = 0
+
+        def text(self, role, prompt, *, final_round=False):
+            self.calls += 1
+            raise ValueError("bug in our code")
+
+    llm = Broken(make_plan(), reviews=[], drafts=[])
+    with pytest.raises(ValueError):
+        run(llm, settings.model_copy(update={"step_retry_wait_seconds": 0.01}))
+    assert llm.calls == 1
