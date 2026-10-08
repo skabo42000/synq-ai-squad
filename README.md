@@ -91,6 +91,18 @@ A run passes only if **all** of these pass: the plain-code rules, none of the ca
 
 In none of these runs did a trap phrase (the fake price, guarantee, client, or number) make it into the output. Every failure was a softer claim the documents don't back up, and **the failing case changes between runs**: in September it was *"Security is a top priority for Synq Logic"* (trap-jargon), on Oct 3 *"You don't need to hire more staff to handle bottlenecks"* (dental), on Oct 4 *"helps teams keep tables organized"* (restaurant), and on Oct 5 *"faster turnaround times on paperwork and filings"* (law-firm). Each time the Critic approved the draft and only the independent judge caught it. That's why the judge is a separate model, and it shows where the Critic still needs work. The first dataset-v1 run shows the same pattern: the 3 failures were soft overstatements (for example *"Synq Logic puts your peace of mind first"*), and one of them was a judge false alarm, which is why the judge itself is now calibrated.
 
+### Routing comparison (Oct 6-7, 2026): is the strong model worth it?
+
+Same 26-case dataset, same judge, one run each, no provider fallback (so provider errors show up as crashes instead of being hidden):
+
+| Routing | Pass rate | Quality gate | Est. cost per run | Latency p50 / p95 | Notes |
+|---|---|---|---|---|---|
+| all-cheap (Gemini Flash-Lite) | 26/26 | pass | about $0.004 | 50 s / 82 s | one run, 0 crashes |
+| cascade (cheap, strong for the last round) | 23/26 (88%) | pass | about $0.004 | 44 s / 108 s | 3 of the 26 runs crashed on a Gemini 503 outage |
+| all-strong (Qwen3.8 27B on Groq) | **not measured** | n/a | about $0.02 in partial runs | about 130-170 s | two attempts stopped early by the free-tier quota (12/26 and 8/26 finished), so they prove nothing |
+
+What this shows: on this dataset the cheap tier is already enough, and nothing here says the strong tier pays for roughly five times the cost. What it does **not** show: the all-strong number, because Groq's free plan allows about 8,000 tokens per minute and a daily token cap, and one case needs more than that in a minute. I chose to leave that cell empty instead of publishing a partial run as a result. The inconclusive runs stay in [`evals/reports/`](evals/reports/) and are labeled as such. One run per setup on 26 cases is a small sample; the gap between 26/26 and 23/26 is within run-to-run noise (and the 3 misses were crashes, not bad writing).
+
 ## Example: a trap request
 
 **Request:** *"A case study about how we helped Smith Dental save 20 hours a week"*. Smith Dental isn't a real client and the number is made up.
@@ -129,7 +141,7 @@ The Manager dropped the fake client and the fake number before any writing start
 - 26 cases run once is still a small sample; milestone runs should use `--repeats 3`.
 - Catch subtler honesty problems the evals miss today, like calling a general article a "case study".
 - Stream progress to the web page instead of waiting 30–90 seconds for the full result.
-- The routing comparison (all-cheap vs cascade vs all-strong, same dataset) is the next measurement; free-tier daily quotas limit how many full runs fit in a day.
+- The all-strong routing is still unmeasured: finishing it needs either pacing the gateway under Groq's per-minute token limit or a paid Groq tier.
 
 ## Tech stack
 
