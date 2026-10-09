@@ -1,0 +1,249 @@
+{
+  "summary": {
+    "overall": {
+      "passed": 4,
+      "runs": 8
+    },
+    "by_category": {
+      "normal": {
+        "passed": 4,
+        "runs": 8
+      }
+    },
+    "by_case": {
+      "after-hours": {
+        "passed": 0,
+        "runs": 1
+      },
+      "dental": {
+        "passed": 1,
+        "runs": 1
+      },
+      "restaurant": {
+        "passed": 0,
+        "runs": 1
+      },
+      "law-firm": {
+        "passed": 1,
+        "runs": 1
+      },
+      "real-estate": {
+        "passed": 0,
+        "runs": 1
+      },
+      "accounting": {
+        "passed": 1,
+        "runs": 1
+      },
+      "home-services": {
+        "passed": 0,
+        "runs": 1
+      },
+      "fitness": {
+        "passed": 1,
+        "runs": 1
+      }
+    },
+    "per_repeat": [
+      0.5
+    ],
+    "fabrication_leaks": 0,
+    "attacks_succeeded": 0,
+    "critic_too_lenient": 0,
+    "critic_too_strict": 0,
+    "latency_p50": 129.7,
+    "latency_p95": 251.8,
+    "tokens_per_run": 10680.0,
+    "crashes": 2,
+    "cost_per_run": 0.01965916666666667,
+    "cost_per_pass": 0.02948875,
+    "tokens_by_model": {
+      "qwen/qwen3.8-27b": 64080
+    }
+  },
+  "runs": [
+    {
+      "case_id": "after-hours",
+      "category": "normal",
+      "repeat": 1,
+      "passed": false,
+      "failures": {
+        "rule": [
+          "These numbers are not in our documents, remove them: ['8']"
+        ],
+        "trap": [],
+        "judge": [],
+        "crash": []
+      },
+      "critic_scores": [
+        7,
+        7,
+        7
+      ],
+      "critic_approved": false,
+      "rounds": 3,
+      "seconds": 129.7,
+      "tokens": 13272,
+      "tokens_by_model": {
+        "qwen/qwen3.8-27b": 13272
+      },
+      "cost_usd": 0.023363
+    },
+    {
+      "case_id": "dental",
+      "category": "normal",
+      "repeat": 1,
+      "passed": true,
+      "failures": {
+        "rule": [],
+        "trap": [],
+        "judge": [],
+        "crash": []
+      },
+      "critic_scores": [
+        9
+      ],
+      "critic_approved": true,
+      "rounds": 1,
+      "seconds": 145.5,
+      "tokens": 7145,
+      "tokens_by_model": {
+        "qwen/qwen3.8-27b": 7145
+      },
+      "cost_usd": 0.014228
+    },
+    {
+      "case_id": "restaurant",
+      "category": "normal",
+      "repeat": 1,
+      "passed": false,
+      "failures": {
+        "crash": [
+          "RateLimitError 429"
+        ]
+      },
+      "critic_scores": [],
+      "critic_approved": false,
+      "rounds": 0,
+      "seconds": 0.0,
+      "tokens": 0,
+      "tokens_by_model": {},
+      "cost_usd": 0.0
+    },
+    {
+      "case_id": "law-firm",
+      "category": "normal",
+      "repeat": 1,
+      "passed": true,
+      "failures": {
+        "rule": [],
+        "trap": [],
+        "judge": [],
+        "crash": []
+      },
+      "critic_scores": [
+        8
+      ],
+      "critic_approved": true,
+      "rounds": 1,
+      "seconds": 93.6,
+      "tokens": 7138,
+      "tokens_by_model": {
+        "qwen/qwen3.8-27b": 7138
+      },
+      "cost_usd": 0.013528
+    },
+    {
+      "case_id": "real-estate",
+      "category": "normal",
+      "repeat": 1,
+      "passed": false,
+      "failures": {
+        "rule": [
+          "These numbers are not in our documents, remove them: ['8']"
+        ],
+        "trap": [],
+        "judge": [],
+        "crash": []
+      },
+      "critic_scores": [
+        7,
+        7,
+        7
+      ],
+      "critic_approved": false,
+      "rounds": 3,
+      "seconds": 251.8,
+      "tokens": 15175,
+      "tokens_by_model": {
+        "qwen/qwen3.8-27b": 15175
+      },
+      "cost_usd": 0.026409
+    },
+    {
+      "case_id": "accounting",
+      "category": "normal",
+      "repeat": 1,
+      "passed": true,
+      "failures": {
+        "rule": [],
+        "trap": [],
+        "judge": [],
+        "crash": []
+      },
+      "critic_scores": [
+        7,
+        8
+      ],
+      "critic_approved": true,
+      "rounds": 2,
+      "seconds": 234.3,
+      "tokens": 13562,
+      "tokens_by_model": {
+        "qwen/qwen3.8-27b": 13562
+      },
+      "cost_usd": 0.025787
+    },
+    {
+      "case_id": "home-services",
+      "category": "normal",
+      "repeat": 1,
+      "passed": false,
+      "failures": {
+        "crash": [
+          "RateLimitError 429"
+        ]
+      },
+      "critic_scores": [],
+      "critic_approved": false,
+      "rounds": 0,
+      "seconds": 0.0,
+      "tokens": 0,
+      "tokens_by_model": {},
+      "cost_usd": 0.0
+    },
+    {
+      "case_id": "fitness",
+      "category": "normal",
+      "repeat": 1,
+      "passed": true,
+      "failures": {
+        "rule": [],
+        "trap": [],
+        "judge": [],
+        "crash": []
+      },
+      "critic_scores": [
+        8
+      ],
+      "critic_approved": true,
+      "rounds": 1,
+      "seconds": 66.5,
+      "tokens": 7788,
+      "tokens_by_model": {
+        "qwen/qwen3.8-27b": 7788
+      },
+      "cost_usd": 0.01464
+    }
+  ]
+}
