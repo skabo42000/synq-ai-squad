@@ -146,7 +146,7 @@ The Manager dropped the fake client and the fake number before any writing start
 ## Tech stack
 
 - **Agents:** LangGraph (state graph, conditional edges, `Send` fan-out, reducers), LangChain, Pydantic structured output
-- **Models:** Gemini 3.1 Flash Lite (all four agents), `gemini-embedding-001` (search), Groq `gpt-oss-120b` (eval judge)
+- **Models:** Gemini 3.1 Flash Lite (default cheap tier), Groq Qwen (strong tier / fallback), `gemini-embedding-001` (search), Groq `gpt-oss-120b` (eval judge)
 - **API and UI:** FastAPI with API-key auth, input validation and a busy guard, plus a single-file HTML page
 - **Engineering:** pytest (unit tests with a scripted fake AI), ruff, mypy, coverage, GitHub Actions, Docker, pydantic-settings
 - **Tooling and hosting:** Python 3.12, uv, Render (free plan), optional LangSmith tracing

@@ -26,10 +26,10 @@ uv run uvicorn synq_ai_squad.api:app --port 8000        # local server, open htt
 
 ## Rules for changes
 - Run the CI command above before every commit; add a test when changing a rule or graph behaviour. Prompt edits are behaviour changes: measure with evals.
-- Upgrade plan (Senior portfolio): `~/.claude/plans/i-want-to-upgrade-transient-matsumoto.md` (Phase 0+1 done; Phase 2 code merged, routing comparison pending: run `evals --routing all-cheap|cascade|all-strong` on fresh quotas, pick default from data, add README table).
+- Upgrade plan (Senior portfolio): `~/.claude/plans/i-want-to-upgrade-transient-matsumoto.md` (Phase 0+1 done; Phase 2 complete: dated all-cheap and cascade results are recorded; all-strong remains intentionally unmeasured per Bosko 2026-10-08. Do not restart it as a pending task).
 - Free-tier daily limits: Gemini flash-lite resets at midnight Pacific; Groq gpt-oss-120b judge 200k tokens/day (judge uses reasoning_effort=low). A full eval is ~26 judge calls; plan at most ~2-3 full runs/day.
 - Measure with `evals` before and after any prompt/model/retrieval change; rerun the full set, report the pass rate honestly.
-- After changing dependencies: `uv export --frozen --no-dev --no-hashes -o requirements.txt`, then commit and push (Render redeploys). Keep `numpy` as a direct dependency.
+- After changing dependencies: `uv export --frozen --no-dev --no-hashes -o requirements.txt`, then prepare the commit/review locally; pushes and the resulting Render redeploy need applicable user authorization. Keep `numpy` as a direct dependency.
 - `main` is protected (ruleset "Protect main - tests and security"): no direct pushes. Work on a branch, open a PR with `gh pr create`, wait for the required checks `pytest` and `secrets` (keep those job names), then `gh pr merge --rebase --delete-branch`. gh lives at `C:\Program Files\GitHub CLI\gh.exe` (not on PATH). Dependabot opens weekly update PRs.
 - Secrets live only in `.env` (git-ignored) and Render env vars. Before every commit check that `.env`, `vector_store.json`, and `evals/results/` are not staged.
 - Render status/logs: use the Render API with `RENDER_API_KEY` from `.env` (service `srv-darblimgekts738vog20`), never ask for dashboard click-lists.
