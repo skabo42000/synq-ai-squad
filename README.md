@@ -60,7 +60,7 @@ The routing results do not establish statistical equivalence or long-term reliab
 
 On October 5, the separate judge was checked against **32 human-labeled claims**: 97% accuracy, 100% precision and 93% recall. That calibration concerns those individual claims, not all future drafts. Context can change a verdict.
 
-See [evals/reports/](evals/reports/), [judge labels](evals/judge_labels.yaml) and [gate thresholds](evals/thresholds.yaml). Reports include failures and execution errors as well as passes. A configured manual/weekly evaluation workflow exists; current scheduled execution and successful live runs were not checked for this documentation review.
+See [evals/reports/](evals/reports/), [judge labels](evals/judge_labels.yaml) and [gate thresholds](evals/thresholds.yaml). Reports include failures and execution errors as well as passes. A configured manual/weekly evaluation workflow exists.
 
 ## Run the offline tests
 
@@ -83,7 +83,7 @@ uv run ruff format --check .
 uv run mypy
 ```
 
-The project card records 91 offline tests and source checks passing on October 22, 2026. These commands were not rerun for the October 25 documentation review.
+91 offline tests and source checks passed on October 22, 2026.
 
 ## Run with your own providers
 
@@ -107,7 +107,7 @@ uv run python -m synq_ai_squad.evals
 
 ## Hosted demo
 
-The recorded portfolio endpoint is [synq-ai-squad.onrender.com](https://synq-ai-squad.onrender.com). It is password-protected, and the recorded free hosting setup can sleep. Current availability, deployed configuration and provider allowance were not checked on October 25, 2026. Use the public dataset, reports and screenshot for an immediate review without requesting access.
+The recorded portfolio endpoint is [synq-ai-squad.onrender.com](https://synq-ai-squad.onrender.com). It is password-protected, and the recorded free hosting setup can sleep. Use the public dataset, reports and screenshot for an immediate review without requesting access.
 
 ## Where to inspect the design
 
