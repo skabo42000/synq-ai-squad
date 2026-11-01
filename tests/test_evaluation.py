@@ -7,7 +7,6 @@ from pydantic import ValidationError
 
 from synq_ai_squad.checks import DOCS_TEXT
 from synq_ai_squad.config import KNOWLEDGE_DIR
-
 from synq_ai_squad.evaluation.dataset import (
     Case,
     Dataset,

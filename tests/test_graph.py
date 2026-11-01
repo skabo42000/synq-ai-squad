@@ -201,7 +201,7 @@ def test_award_plan_is_not_writer_evidence(settings):
         notes="- Answers questions on your website, by text, and by phone [1]",
     )
     out = run(llm, settings)
-    first, *revisions = llm.prompts["write"]
+    _first, *revisions = llm.prompts["write"]
     for prompt in llm.prompts["write"]:
         assert "a plan, not evidence" in prompt  # the plan's angle can't serve as a source
         assert "awards, rankings, or recognition" in prompt
