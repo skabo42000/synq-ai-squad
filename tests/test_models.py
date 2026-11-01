@@ -97,17 +97,51 @@ def test_error_labels_never_include_the_provider_message():
     assert error_label(ValueError("details")) == "ValueError"
 
 
+class GoogleStyleError(Exception):
+    """Google's API errors carry the HTTP status in `code`, not `status_code`."""
+
+    def __init__(self, code: int, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+class APITimeoutError(Exception):
+    """Like the Groq/OpenAI SDK timeout: no status code, a timeout type."""
+
+
 @pytest.mark.parametrize(
     "error, transient",
     [
+        # server errors, including the gateway errors (502/504) that the Oct 26 eval run hit
+        (StatusError(500, "internal"), True),
+        (StatusError(502, "bad gateway"), True),
         (StatusError(503, "UNAVAILABLE"), True),
+        (StatusError(504, "gateway timeout"), True),
+        (GoogleStyleError(504, "Deadline exceeded"), True),
+        # rate limits stay retried: a per-minute window refills
         (StatusError(429, "rate limit"), True),
-        (TimeoutError("timeout"), True),
+        # other client errors are our request's fault: retrying can't fix them
+        (StatusError(400, "bad request"), False),
+        (StatusError(401, "unauthorized"), False),
+        (StatusError(403, "forbidden"), False),
+        (StatusError(404, "model not found"), False),
+        (StatusError(408, "request timeout"), False),
+        (StatusError(400, "invalid value for timeout"), False),  # the status decides, not the message
+        # no status: timeout types and outage messages
+        (TimeoutError("timed out"), True),
+        (APITimeoutError("Request timed out."), True),
+        (RuntimeError("504 Gateway Timeout"), True),
+        (RuntimeError("429 rate limit: tokens per minute"), True),
         (ValueError("bad schema"), False),
+        (ValueError("timeout must be a positive number"), False),
     ],
 )
-def test_transient_errors_are_recognised(error, transient):
+def test_retryable_statuses_and_timeouts(error, transient):
     assert is_transient(error) is transient
+
+
+def test_error_label_reads_googles_code_attribute():
+    assert error_label(GoogleStyleError(504, "secret request text")) == "GoogleStyleError 504"
 
 
 # ---------- cost estimates ----------

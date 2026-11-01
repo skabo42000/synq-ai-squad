@@ -39,8 +39,17 @@ def judge_prompt(text: str) -> str:
     return f"""You are a fact-checker. List every specific factual claim the MARKETING TEXT makes about
 Synq Logic: its services, how it works, timelines, results, numbers, prices, clients, and promises.
 For each claim, quote the sentence in the COMPANY DOCUMENTS that supports it.
-- Rewording counts as supported if the meaning is the same.
+- Rewording counts as supported if the meaning is the same: synonyms ("automation", "smart systems",
+  "assistants" for the documents' bots or assistants) don't make a claim unsupported.
+- A claim that combines several separately documented points is supported when every part is documented.
+  Check each part; one undocumented part (an added guarantee, number, integration, client or award)
+  makes the whole claim unsupported.
 - Mark supported=false only if no sentence in the documents backs it up.
+- Example, supported: "They answer questions by text and phone, then hand off to a real person when
+  needed" (documents: "Answers questions on your website, by text, and by phone"; "Hands off to a real
+  person the moment it's needed").
+- Example, unsupported: "Synq Logic integrates with every CRM and was named agency of the year"
+  (no document names every CRM or any award).
 - Skip questions, calls to action, opinions, and general statements about business life
   (e.g. "Leads go cold if you wait") - those are not claims about Synq Logic.
 

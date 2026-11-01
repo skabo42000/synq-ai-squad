@@ -38,19 +38,39 @@ Role = Literal["manager", "research", "write", "critic"]
 Tier = Literal["cheap", "strong"]
 TEMPERATURE: dict[Role, float] = {"manager": 0, "research": 0, "write": 0.7, "critic": 0}  # the Writer is creative
 
-TRANSIENT_MARKERS = ("429", "503", "500", "resource_exhausted", "unavailable", "rate limit", "overloaded", "timeout")
+# Only for errors that carry no HTTP status code (some SDKs wrap the status into the message text).
+TRANSIENT_MARKERS = ("429", "500", "502", "503", "504", "resource_exhausted", "unavailable", "rate limit", "overloaded")
+
+
+def status_code(e: BaseException) -> int | None:
+    """The HTTP status a provider error carries (Groq: status_code, Google: code), or None."""
+    for attr in ("status_code", "code"):
+        code = getattr(e, attr, None)
+        if isinstance(code, int) and not isinstance(code, bool) and 100 <= code <= 599:
+            return int(code)
+    return None
 
 
 def error_label(e: BaseException) -> str:
     """A log-safe description: the error type plus its numeric status code, never the provider's message
     (provider messages can echo request data or account details)."""
-    code = getattr(e, "status_code", None) or getattr(e, "code", None)
-    return f"{type(e).__name__} {code}" if isinstance(code, int) else type(e).__name__
+    code = status_code(e)
+    return f"{type(e).__name__} {code}" if code is not None else type(e).__name__
 
 
 def is_transient(e: BaseException) -> bool:
-    """An outage, rate limit or timeout: worth retrying, unlike a bug or a bad request."""
-    text = f"{type(e).__name__} {getattr(e, 'status_code', '')} {getattr(e, 'code', '')} {e}".lower()
+    """An outage, rate limit or timeout: worth retrying, unlike a bug or a bad request.
+
+    An explicit status decides first: 429 (rate limit) and every 5xx (including 502/504 gateway errors)
+    are retried, any other 4xx is not, whatever its message says. Without a status, a timeout exception
+    type is retried, and the message is checked for the outage markers above.
+    """
+    code = status_code(e)
+    if code is not None:
+        return code == 429 or 500 <= code <= 599
+    if any("timeout" in cls.__name__.lower() for cls in type(e).__mro__):  # TimeoutError, httpx/Groq timeouts
+        return True
+    text = f"{type(e).__name__} {e}".lower()
     return any(m in text for m in TRANSIENT_MARKERS)
 
 

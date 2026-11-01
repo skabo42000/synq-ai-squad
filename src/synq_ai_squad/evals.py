@@ -52,6 +52,7 @@ log = logging.getLogger(__name__)
 RETRY_WAITS = (30, 90)  # seconds to wait before retrying a run that hit a provider outage or rate limit
 # A daily allowance won't refill in 90 seconds: retrying only burns time, so the run stops instead.
 DAILY_QUOTA_MARKERS = ("per day", "perday", "tokens per day", "requests per day", "(TPD)", "(RPD)")
+PROVIDER_ERROR_PREFIX = "provider error after retries: "
 EXIT_PASS, EXIT_GATE_FAILED, EXIT_BAD_INPUT, EXIT_INCONCLUSIVE = 0, 1, 2, 3
 
 
@@ -104,13 +105,16 @@ def run_with_retries(squad: Squad, judge: Runnable, settings: Settings, case: Ca
                 raise DailyQuotaExhausted(type(e).__name__) from e
             if wait is None or not is_transient(e):
                 # Record the error type only: provider messages can echo request data or account details.
-                log.warning("  %s crashed: %s", case.id, error_label(e))
+                # An outage that outlasted every retry is labelled as such, so it can't be mistaken for a bug;
+                # it is still a crash (passed=False), never a quality pass.
+                label = f"{PROVIDER_ERROR_PREFIX}{error_label(e)}" if is_transient(e) else error_label(e)
+                log.warning("  %s crashed: %s", case.id, label)
                 return RunResult(
                     case_id=case.id,
                     category=case.category,
                     repeat=repeat,
                     passed=False,
-                    failures={"crash": [error_label(e)]},
+                    failures={"crash": [label]},
                 )
             log.warning("  %s: provider unavailable (%s), retry %d in %ds", case.id, error_label(e), attempt, wait)
             time.sleep(wait)

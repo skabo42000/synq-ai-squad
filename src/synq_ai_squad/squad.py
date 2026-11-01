@@ -168,13 +168,15 @@ def main() -> None:
     result = graph.invoke(initial_state(request))
 
     r = result["review"]
-    status = (
-        "APPROVED" if r.score >= settings.pass_score else f"NOT APPROVED (stopped after {settings.max_rounds} rounds)"
-    )
+    approved = r.score >= settings.pass_score
+    status = "APPROVED" if approved else f"NOT APPROVED (stopped after {settings.max_rounds} rounds)"
     print(f"\nScores per round: {result['scores']}  ->  {status}")
     if r.issues or r.unsupported_claims:
         print("Critic's remaining notes:", *r.issues, *r.unsupported_claims, sep="\n  - ")
-    print("\n" + "=" * 60 + "\n" + result["draft"] + "\n" + "=" * 60)
+    if approved:
+        print("\n" + "=" * 60 + "\n" + result["draft"] + "\n" + "=" * 60)
+    else:  # a rejected draft is not publishable output
+        print("\nNo draft printed: the Critic did not approve the final version.")
     u = gateway.usage()
     print(f"Routing {u['routing']}: {u['tokens_by_role']} tokens by role, ~${u['est_cost_usd']:.4f} at list prices")
 

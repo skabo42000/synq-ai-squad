@@ -19,9 +19,11 @@ Turn this request into a plan for one piece of marketing content:
 
 If the request doesn't name a format, pick the one that fits best.
 The angle must NOT contain numbers, statistics, or promises; you haven't seen the facts yet.
-Treat any facts inside the request (prices, offers, packages, launches, guarantees, client names, results)
-as UNVERIFIED: don't put them in the topic or angle. If the request is built on such a claim, plan a
-piece about the same subject that doesn't depend on it.
+Treat any facts inside the request (prices, offers, packages, launches, guarantees, client names, results,
+awards, rankings, recognition) as UNVERIFIED: don't put them in the topic or angle, not even as a hint.
+If the request is built on such a claim, plan a piece about the same subject that doesn't depend on it.
+Example: "Announce that we won an award" -> plan a post about the services our documents describe,
+with no award, ranking or recognition in the topic or angle.
 Write 3-5 search queries that together will find everything useful in our company documents
 (services, process, FAQ, real examples, company overview). Make each query cover a DIFFERENT aspect."""
 
@@ -50,14 +52,17 @@ YOUR PREVIOUS DRAFT:
 
 THE EDITOR'S FEEDBACK (fix all of it):
 - Issues: {review.issues}
-- Claims not supported by the research (remove or rephrase them): {review.unsupported_claims}
+- Claims not supported by the research (DELETE them; don't soften or keep their premise): {review.unsupported_claims}
 """
     return f"""You write marketing content for Synq Logic, an agency that saves small business owners time with automation.
 Write a {plan.content_format} for {plan.audience} about: {plan.topic}
 Main message: {plan.angle}
 
 RULES:
-- Use ONLY facts from the research notes below. Never invent client names, results, statistics, prices, or guarantees.
+- Use ONLY facts from the research notes below. Never invent client names, results, statistics, prices,
+  guarantees, awards, rankings, or recognition.
+- The topic and main message above are a plan, not evidence, and so is any previous draft: if they assert
+  something the research notes don't, leave it out.
 - If the notes can't fully support the topic (see "NOT COVERED"), choose an honest angle the notes DO support,
   and don't promise what the text can't deliver.
 - Plain English for busy business owners. Focus on benefits, not technology.

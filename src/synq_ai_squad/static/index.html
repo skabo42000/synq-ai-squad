@@ -148,7 +148,7 @@
       if (!res.ok) return showError("Something went wrong while writing. Please try again.");
 
       const d = await res.json();
-      $("badge").textContent = d.approved ? "Approved by the Critic" : "Not approved: read carefully before using";
+      $("badge").textContent = d.approved ? "Approved by the Critic" : "Not approved: no publishable draft, see the Critic's notes";
       $("badge").className = "badge " + (d.approved ? "ok" : "warn");
       $("meta").innerHTML = "";
       const meta = [["Format", d.content_format], ["For", d.audience], ["Drafts", d.critic_scores.length], ["Time", d.seconds + "s"]];

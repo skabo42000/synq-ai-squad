@@ -124,3 +124,38 @@ def test_each_response_reports_that_runs_usage_and_cost(settings):
         data = c.post("/generate", json=BODY, headers={"X-API-Key": PASSWORD}).json()
     assert data["usage"]["est_cost_usd"] == 0.0012
     assert llm.resets == 1  # counters are reset before each run, so the numbers describe only this request
+
+
+AWARD = "Synq Logic was recognized as Small Business AI Agency of the Year."
+
+
+def test_rejected_award_returns_no_publishable_content(settings):
+    # Three rounds, every one rejected for the invented award: the caller gets the verdict, not the draft.
+    llm = ScriptedLLM(
+        make_plan(), reviews=[make_review(4, unsupported=[AWARD])] * 3, drafts=[f"{AWARD} {GOOD_DRAFT}"] * 3
+    )
+    with TestClient(create_app(settings, graph=build_graph(llm, SpyIndex(), settings))) as c:
+        r = c.post("/generate", json=BODY, headers={"X-API-Key": PASSWORD})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["approved"] is False
+    assert data["content"] == ""
+    assert "Agency of the Year" not in r.text.replace(AWARD, "")  # only the Critic's note names the claim
+    assert data["critic_scores"] == [4, 4, 4]
+    assert AWARD in data["critic_notes"]
+
+
+def test_approved_content_contract_is_preserved(client):
+    data = client.post("/generate", json=BODY, headers={"X-API-Key": PASSWORD}).json()
+    assert set(data) == {
+        "content",
+        "approved",
+        "content_format",
+        "audience",
+        "angle",
+        "critic_scores",
+        "critic_notes",
+        "seconds",
+        "usage",
+    }
+    assert data["approved"] is True and data["content"] == GOOD_DRAFT

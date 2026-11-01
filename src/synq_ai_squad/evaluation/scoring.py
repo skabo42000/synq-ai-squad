@@ -201,7 +201,8 @@ def render_report(
     for r in results:
         by_case[r.case_id].append(r)
     for case_id, rs in by_case.items():
-        reasons = sorted({m for r in rs for msgs in r.failures.values() for m in msgs})
+        # Prefix each reason with its failure type, so a provider crash never reads like a quality failure.
+        reasons = sorted({f"{kind}: {m}" for r in rs for kind, msgs in r.failures.items() for m in msgs})
         scores = " · ".join(str(r.critic_scores) for r in rs)
         reason_text = "<br>".join(x.replace("|", "/") for x in reasons) or "-"
         lines.append(f"| {case_id} | {rs[0].category} | {_fmt(s.by_case[case_id])} | {scores} | {reason_text} |")
