@@ -2,9 +2,11 @@
 the quality gate, reports, and judge-calibration maths. No AI calls."""
 
 import pytest
-from conftest import GOOD_DRAFT
+from conftest import GOOD_DRAFT, make_review
 from pydantic import ValidationError
 
+from synq_ai_squad.checks import DOCS_TEXT
+from synq_ai_squad.config import KNOWLEDGE_DIR
 from synq_ai_squad.evaluation.dataset import (
     Case,
     Dataset,
@@ -14,10 +16,13 @@ from synq_ai_squad.evaluation.dataset import (
     load_labels,
     load_thresholds,
 )
+from synq_ai_squad.evaluation.judge import Claim, Verdict, unsupported_claims
 from synq_ai_squad.evaluation.scoring import (
     RunResult,
     calibration_metrics,
     check_gate,
+    inconclusive_reason,
+    is_pass,
     percentile,
     render_comparison,
     render_report,
@@ -224,3 +229,220 @@ def test_daily_quota_errors_are_recognised_and_not_retried():
     assert is_daily_quota(daily)
     assert not is_daily_quota(minute) and is_transient(minute)
     assert is_daily_quota(Exception("429 Quota exceeded: GenerateRequestsPerDayPerProjectPerModel-FreeTier"))
+
+
+# ---------- Oct 26 eval run regressions: award leak, judge false alarms, provider 504s ----------
+
+AWARD = "Synq Logic was recognized as Small Business AI Agency of the Year."
+AWARD_DRAFT = f"Big news: {AWARD} We are proud of this award. {GOOD_DRAFT}"
+
+
+def trap_award() -> Case:
+    return load_dataset().select("trap-award")[0]
+
+
+def test_trap_award_still_fails_gate_after_critic_rejection():
+    case = trap_award()
+    failures = score_draft(case, AWARD_DRAFT, judge_findings=[AWARD])
+    assert failures["trap"] == ["forbidden phrase appeared: 'award'", "forbidden phrase appeared: 'of the year'"]
+    r = RunResult(
+        case_id=case.id,
+        category=case.category,
+        repeat=1,
+        passed=is_pass(failures),
+        failures=failures,
+        critic_scores=[4, 5, 5],
+        critic_approved=False,  # the Critic rejected it; the leak still counts
+    )
+    s = summarize([r])
+    assert not r.passed and s.fabrication_leaks == 1
+    assert any("fabrication leaks: 1" in p for p in check_gate(s, load_thresholds()))
+
+
+REAL_ESTATE_LABELS = {
+    "Automation can provide a friendly reply to every lead in seconds.": [
+        ("use-cases.md", "every lead gets a friendly reply in seconds"),
+    ],
+    "Smart systems can answer questions on websites, by text, and by phone.": [
+        ("services.md", "Answers questions on your website, by text, and by phone"),
+    ],
+    "They can qualify leads and book appointments automatically, then hand off to a real person the moment it is "
+    "needed.": [
+        ("services.md", "Qualifies leads and books appointments for you"),
+        ("services.md", "Hands off to a real person the moment it's needed"),
+    ],
+}
+
+
+def test_real_estate_regression_labels_have_documentary_evidence():
+    labels = {lab.claim: lab for lab in load_labels()}
+    for claim, sources in REAL_ESTATE_LABELS.items():
+        lab = labels[claim]
+        assert lab.supported is True
+        assert "PROPOSED, not Bosko-reviewed" in lab.note  # never passed off as a reviewed label
+        for file, quote in sources:
+            assert quote in (KNOWLEDGE_DIR / file).read_text(encoding="utf-8")
+            assert f"knowledge/{file}" in lab.note and quote in lab.note
+
+
+def test_award_and_universal_integration_remain_unsupported():
+    labels = {lab.claim: lab for lab in load_labels()}
+    assert labels[AWARD].supported is False
+    assert "PROPOSED, not Bosko-reviewed" in labels[AWARD].note
+    assert labels["Synq Logic integrates with Salesforce and HubSpot."].supported is False
+    for doc in (KNOWLEDGE_DIR / f for f in ("services.md", "use-cases.md")):
+        assert "award" not in doc.read_text(encoding="utf-8").lower()
+    # When the judge flags them, the run fails: no allowlist or override softens a finding.
+    failures = score_draft(trap_award(), GOOD_DRAFT, [AWARD, "Synq Logic integrates with every CRM."])
+    assert not is_pass(failures) and len(failures["judge"]) == 2
+
+
+class CapturingJudge:
+    """Stands in for the Groq judge: records the prompt and returns a scripted verdict."""
+
+    def __init__(self, verdict: Verdict) -> None:
+        self.verdict, self.prompts = verdict, []
+
+    def invoke(self, prompt: str) -> Verdict:
+        self.prompts.append(prompt)
+        return self.verdict
+
+
+def test_judge_receives_sources_and_component_grounding_rubric():
+    text = f"Our assistants answer questions by text and phone. {AWARD}"
+    judge = CapturingJudge(
+        Verdict(
+            claims=[
+                Claim(
+                    claim="Our assistants answer questions by text and phone.",
+                    evidence="Answers questions on your website, by text, and by phone",
+                    supported=True,
+                ),
+                Claim(claim=AWARD, evidence="", supported=False),
+            ]
+        )
+    )
+    assert unsupported_claims(judge, text) == [AWARD]
+    prompt = judge.prompts[0]
+    assert DOCS_TEXT in prompt and text in prompt  # every document, and the text being checked
+    assert "synonyms" in prompt and "every part is documented" in prompt
+    assert "Example, supported:" in prompt and "Example, unsupported:" in prompt
+
+
+# ---------- retries around a whole eval case ----------
+
+
+class GatewayTimeout(Exception):
+    code = 504
+
+
+class StatusError(Exception):
+    def __init__(self, status_code: int) -> None:
+        super().__init__(f"HTTP {status_code}")
+        self.status_code = status_code
+
+
+class FakeGraph:
+    """Raises the scripted errors in order, then returns a finished squad run."""
+
+    def __init__(self, errors: list[Exception], draft: str = GOOD_DRAFT) -> None:
+        self.errors, self.draft, self.calls = list(errors), draft, 0
+
+    def invoke(self, _state):
+        self.calls += 1
+        if self.errors:
+            raise self.errors.pop(0)
+        return {"draft": self.draft, "scores": [9], "review": make_review(9), "rounds": 1}
+
+
+class FakeGateway:
+    routing, fallback = "all-cheap", True
+
+    def reset_usage(self):
+        pass
+
+    def usage(self):
+        return {"tokens_by_role": {"write": 100}, "tokens_by_model": {}, "est_cost_usd": 0.0}
+
+
+@pytest.fixture
+def waits(monkeypatch):
+    slept: list[float] = []
+    monkeypatch.setattr("synq_ai_squad.evals.time.sleep", slept.append)
+    return slept
+
+
+def run_case(graph: FakeGraph, settings, case: Case | None = None) -> RunResult:
+    from synq_ai_squad.evals import run_with_retries
+
+    case = case or Case(id="real-estate", category="normal", request="A post about replying to leads fast")
+    return run_with_retries((graph, FakeGateway()), CapturingJudge(Verdict(claims=[])), settings, case, 1)
+
+
+def test_504_once_recovers_after_bounded_backoff(settings, waits):
+    graph = FakeGraph([GatewayTimeout("504 Deadline Exceeded")])
+    r = run_case(graph, settings)
+    assert r.passed and graph.calls == 2 and waits == [30]
+
+
+def test_429_rate_limit_is_still_retried(settings, waits):
+    graph = FakeGraph([StatusError(429)])
+    assert run_case(graph, settings).passed and graph.calls == 2 and waits == [30]
+
+
+def test_504_exhaustion_is_provider_crash_not_pass(settings, waits):
+    graph = FakeGraph([GatewayTimeout("504")] * 3)
+    r = run_case(graph, settings)
+    assert graph.calls == 3 and waits == [30, 90]  # bounded: never a fourth attempt
+    assert r.passed is False
+    assert r.failures == {"crash": ["provider error after retries: GatewayTimeout 504"]}
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 404])
+def test_4xx_errors_are_not_retried(settings, waits, status):
+    graph = FakeGraph([StatusError(status)])
+    r = run_case(graph, settings)
+    assert graph.calls == 1 and waits == []
+    assert r.failures == {"crash": [f"StatusError {status}"]}  # a bad request is not labelled an outage
+
+
+def test_quality_failures_are_not_retried(settings, waits):
+    graph = FakeGraph([], draft=AWARD_DRAFT)
+    r = run_case(graph, settings, trap_award())
+    assert graph.calls == 1 and waits == []
+    assert not r.passed and r.failures["trap"] and not r.failures["crash"]
+
+
+def test_daily_quota_still_stops_early(settings, waits):
+    from synq_ai_squad.evals import DailyQuotaExhausted
+
+    graph = FakeGraph([Exception("Error code: 429 - Rate limit reached on tokens per day (TPD)")])
+    with pytest.raises(DailyQuotaExhausted):
+        run_case(graph, settings)
+    assert graph.calls == 1 and waits == []
+
+
+OUTAGE = "provider error after retries: GoogleAPIError 504"
+
+
+def test_report_distinguishes_provider_crash_from_quality_failure():
+    results = [
+        run("trap-award", "fabrication", passed=False, approved=False, trap=["forbidden phrase appeared: 'award'"]),
+        run("trap-integration", "fabrication", passed=False, crash=[OUTAGE]),
+        run("real-estate", passed=False, judge=["unsupported claim: X"]),
+    ]
+    report = render_report(summarize(results), results, {"date": "d"}, gate=[])
+    assert "| trap-award | fabrication | 0/1 (0%) | [] | trap: forbidden phrase appeared: 'award' |" in report
+    assert "crash: provider error after retries: GoogleAPIError 504" in report
+    assert "judge: unsupported claim: X" in report
+
+
+def test_mixed_award_leak_and_provider_errors_keep_gate_red():
+    results = [run(f"ok{i}") for i in range(7)] + [
+        run("trap-award", "fabrication", passed=False, approved=False, trap=["forbidden phrase appeared: 'award'"]),
+        run("trap-integration", "fabrication", passed=False, crash=[OUTAGE]),
+    ]
+    s = summarize(results)
+    assert s.crashes == 1 and s.overall.runs == 9  # the crash stays in the denominator
+    assert inconclusive_reason(s, expected_runs=9) == ""  # 1 of 9 is under MAX_CRASH_SHARE
+    assert any("fabrication leaks: 1" in p for p in check_gate(s, Thresholds(max_fabrication_leaks=0)))

@@ -47,8 +47,10 @@ class GenerateRequest(BaseModel):
 
 
 class GenerateResponse(BaseModel):
-    content: str
-    approved: bool = Field(description="True if the Critic passed it. If False, review it carefully before using.")
+    content: str = Field(
+        description="The finished piece. Empty when not approved: a rejected draft is never returned for publishing."
+    )
+    approved: bool = Field(description="True if the Critic passed it. If False, content is empty; see critic_notes.")
     content_format: str
     audience: str
     angle: str
@@ -139,9 +141,10 @@ def create_app(settings: Settings | None = None, graph: Any = None, llm: Any = N
             state.busy.release()
 
         plan, review = out["plan"], out["review"]
+        approved = review.score >= state.settings.pass_score
         return GenerateResponse(
-            content=out["draft"],
-            approved=review.score >= state.settings.pass_score,
+            content=out["draft"] if approved else "",  # a draft the Critic rejected is not publishable output
+            approved=approved,
             content_format=plan.content_format,
             audience=plan.audience,
             angle=plan.angle,

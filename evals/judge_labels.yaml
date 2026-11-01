@@ -86,3 +86,19 @@ labels:
   - claim: Automation means faster turnaround on paperwork and legal filings.
     supported: true
     note: Added to knowledge/ on 2026-10-05 after Bosko confirmed it is true (was unsupported before).
+
+  # ---------- proposed coordinator additions, 2026-11-01: NOT reviewed by Bosko ----------
+  # From the 2026-10-26 eval run: the judge flagged the three real-estate claims below although the
+  # documents back them; the award claim is the trap-award fabrication. Bosko has not reviewed these yet.
+  - claim: Automation can provide a friendly reply to every lead in seconds.
+    supported: true
+    note: "PROPOSED, not Bosko-reviewed. knowledge/use-cases.md:7 'every lead gets a friendly reply in seconds'"
+  - claim: Smart systems can answer questions on websites, by text, and by phone.
+    supported: true
+    note: "PROPOSED, not Bosko-reviewed. knowledge/services.md:8 'Answers questions on your website, by text, and by phone'"
+  - claim: They can qualify leads and book appointments automatically, then hand off to a real person the moment it is needed.
+    supported: true
+    note: "PROPOSED, not Bosko-reviewed. knowledge/services.md:9-10 'Qualifies leads and books appointments for you' / 'Hands off to a real person the moment it's needed'"
+  - claim: Synq Logic was recognized as Small Business AI Agency of the Year.
+    supported: false
+    note: "PROPOSED, not Bosko-reviewed. No award or recognition appears anywhere in knowledge/ (trap-award case)"
