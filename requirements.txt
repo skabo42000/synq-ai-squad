@@ -92,7 +92,7 @@ langchain-protocol==0.0.19
     #   langgraph-sdk
 langchain-text-splitters==1.1.2
     # via synq-ai-squad
-langgraph==1.2.12
+langgraph==1.2.14
     # via synq-ai-squad
 langgraph-checkpoint==4.2.0
     # via
