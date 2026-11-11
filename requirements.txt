@@ -196,7 +196,7 @@ uuid-utils==0.17.1
     #   langsmith
 uvicorn==0.53.0
     # via synq-ai-squad
-uvloop==0.22.1 ; platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32'
+uvloop==0.23.0 ; platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32'
     # via uvicorn
 watchfiles==1.3.0
     # via uvicorn
