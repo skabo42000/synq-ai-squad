@@ -36,7 +36,7 @@ fastapi==0.141.1
     # via synq-ai-squad
 filetype==1.2.0
     # via langchain-google-genai
-google-auth==2.58.1
+google-auth==2.59.1
     # via google-genai
 google-genai==2.25.0
     # via langchain-google-genai
